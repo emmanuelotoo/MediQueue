@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MediQueue.Api/MediQueue.Api.csproj" />
+    <Project Path="src/MediQueue.Client/MediQueue.Client.csproj" />
+    <Project Path="src/MediQueue.Domain/MediQueue.Domain.csproj" />
+    <Project Path="src/MediQueue.Infrastructure/MediQueue.Infrastructure.csproj" />
+    <Project Path="src/MediQueue.Shared/MediQueue.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MediQueue.Api.Tests/MediQueue.Api.Tests.csproj" />
+    <Project Path="tests/MediQueue.Client.Tests/MediQueue.Client.Tests.csproj" />
+    <Project Path="tests/MediQueue.Domain.Tests/MediQueue.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
