@@ -16,6 +16,7 @@
     <ProjectReference Include="..\MediQueue.Domain\MediQueue.Domain.csproj" />
     <ProjectReference Include="..\MediQueue.Infrastructure\MediQueue.Infrastructure.csproj" />
     <ProjectReference Include="..\MediQueue.Shared\MediQueue.Shared.csproj" />
+    <ProjectReference Include="..\MediQueue.Client\MediQueue.Client.csproj" />
   </ItemGroup>
 
 </Project>

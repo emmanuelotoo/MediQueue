@@ -23,6 +23,14 @@ public static class DemoDataSeeder
 
     private const int HistoryDays = 14;
 
+    /// <summary>Brings the schema up to date without adding any data.</summary>
+    public static async Task MigrateAsync(IServiceProvider services, CancellationToken cancellationToken = default)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<MediQueueDbContext>();
+        await db.Database.MigrateAsync(cancellationToken);
+    }
+
     public static async Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
     {
         using var scope = services.CreateScope();
@@ -30,8 +38,6 @@ public static class DemoDataSeeder
 
         var db = sp.GetRequiredService<MediQueueDbContext>();
         var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(DemoDataSeeder));
-
-        await db.Database.MigrateAsync(cancellationToken);
 
         if (await db.Departments.AnyAsync(cancellationToken))
         {

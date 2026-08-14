@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mediqueue",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/MediQueue.Api", "--urls", "http://localhost:5219"],
+      "port": 5219
+    }
+  ]
+}
