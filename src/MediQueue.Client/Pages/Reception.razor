@@ -1,0 +1,278 @@
+@page "/reception"
+@attribute [Authorize(Policy = Policies.ManageQueue)]
+@implements IAsyncDisposable
+@inject MediQueueApi Api
+@inject QueueHubClient Hub
+
+<PageTitle>Reception — MediQueue</PageTitle>
+
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Front desk</span>
+        <h1 class="page-head__title">Queue console</h1>
+    </div>
+    <div class="page-head__aside">
+        <LiveIndicator />
+        <a class="btn btn--quiet" href="@($"/board/{_departmentId}")" target="_blank">
+            Open waiting-room board
+        </a>
+    </div>
+</div>
+
+@if (_alerts.Count > 0)
+{
+    <div class="stack" style="margin-bottom:var(--space-5);">
+        @foreach (var alert in _alerts)
+        {
+            <div class="alert alert--emergency" role="alert">
+                <strong>Emergency</strong>
+                <span>
+                    <TicketCode Code="@alert.TicketCode" /> — @alert.PatientName in
+                    @alert.DepartmentName@(alert.RaisedBy is null ? "" : $", raised by {alert.RaisedBy}")
+                </span>
+            </div>
+        }
+    </div>
+}
+
+<div class="tabs" role="tablist">
+    @foreach (var department in _departments)
+    {
+        <button role="tab"
+                class="tab @(department.Id == _departmentId ? "tab--on" : null)"
+                aria-selected="@(department.Id == _departmentId)"
+                @onclick="() => SwitchAsync(department.Id)">
+            @department.Name
+            <span class="tab__count data">@department.WaitingCount</span>
+        </button>
+    }
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert--emergency" role="alert" style="margin-bottom:var(--space-5);">@_error</div>
+}
+
+<div class="stack">
+    <section class="panel">
+        <div class="panel__head">
+            <span class="panel__title">Waiting</span>
+            <span class="panel__count">@(_queue?.Waiting.Count ?? 0)</span>
+            <div style="margin-left:auto;">
+                <a class="btn btn--primary btn--small" href="/checkin">Check someone in</a>
+            </div>
+        </div>
+
+        <div class="panel__body panel__body--flush">
+            @if (_queue is null)
+            {
+                <div class="panel__body stack">
+                    <div class="skeleton"></div>
+                    <div class="skeleton" style="width:80%;"></div>
+                </div>
+            }
+            else
+            {
+                <QueueTable Entries="_queue.Waiting" RecentlyChanged="_changed"
+                            EmptyTitle="Nobody is waiting"
+                            EmptyNote="Patients appear here the moment they check in.">
+                    <Actions Context="entry">
+                        <select class="select select--inline" aria-label="Call to room"
+                                @onchange="e => CallAsync(entry, e.Value?.ToString())">
+                            <option value="">Call to…</option>
+                            @for (var room = 1; room <= RoomCount; room++)
+                            {
+                                <option value="@room">Room @room</option>
+                            }
+                        </select>
+
+                        @if (entry.Priority is not TicketPriority.Emergency)
+                        {
+                            <button class="btn btn--small btn--danger"
+                                    title="Move to the front of the queue"
+                                    @onclick="() => EscalateAsync(entry)">
+                                Escalate
+                            </button>
+                        }
+
+                        <select class="select select--inline" aria-label="Transfer to department"
+                                @onchange="e => TransferAsync(entry, e.Value?.ToString())">
+                            <option value="">Move to…</option>
+                            @foreach (var target in _departments.Where(d => d.Id != _departmentId))
+                            {
+                                <option value="@target.Id">@target.Name</option>
+                            }
+                        </select>
+                    </Actions>
+                </QueueTable>
+            }
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel__head">
+            <span class="panel__title">In consultation rooms</span>
+            <span class="panel__count">@(_queue?.InProgress.Count ?? 0)</span>
+        </div>
+
+        <div class="panel__body panel__body--flush">
+            @if (_queue is not null)
+            {
+                <QueueTable Entries="_queue.InProgress" ShowStatus="true"
+                            EmptyTitle="No rooms in use"
+                            EmptyNote="Call a waiting patient to fill one.">
+                    <Actions Context="entry">
+                        @if (entry.Status == TicketStatus.Called)
+                        {
+                            <button class="btn btn--small btn--quiet" @onclick="() => NoShowAsync(entry)">
+                                No show
+                            </button>
+                        }
+                    </Actions>
+                </QueueTable>
+            }
+        </div>
+    </section>
+
+    @if (_queue is not null)
+    {
+        <div class="stats">
+            <StatCard Label="Waiting" Value="@_queue.Waiting.Count.ToString()" />
+            <StatCard Label="Seen today" Value="@_queue.CompletedToday.ToString()" />
+            <StatCard Label="Average wait"
+                      Value="@(_queue.AverageWaitMinutes?.ToString() ?? "—")" Unit=" min" />
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<DepartmentDto> _departments = [];
+    private DepartmentQueueDto? _queue;
+    private int _departmentId;
+    private string? _error;
+
+    private readonly List<EmergencyAlertDto> _alerts = [];
+    private HashSet<Guid> _changed = [];
+
+    private int RoomCount =>
+        _departments.FirstOrDefault(d => d.Id == _departmentId)?.ConsultationRooms ?? 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = await Api.GetDepartmentsAsync();
+        _departmentId = _departments.FirstOrDefault()?.Id ?? 0;
+
+        Hub.QueueUpdated += OnQueueUpdated;
+        Hub.EmergencyFlagged += OnEmergency;
+
+        await Hub.WatchReceptionAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_departmentId == 0)
+        {
+            return;
+        }
+
+        _queue = await Api.GetQueueAsync(_departmentId);
+        await Hub.WatchDepartmentAsync(_departmentId);
+    }
+
+    private async Task SwitchAsync(int departmentId)
+    {
+        if (departmentId == _departmentId)
+        {
+            return;
+        }
+
+        await Hub.StopWatchingDepartmentAsync(_departmentId);
+        _departmentId = departmentId;
+        _queue = null;
+        await LoadAsync();
+    }
+
+    private void OnQueueUpdated(DepartmentQueueDto dto)
+    {
+        if (dto.DepartmentId != _departmentId)
+        {
+            // Another department moved, so its tab count is now stale.
+            _ = RefreshCountsAsync();
+            return;
+        }
+
+        // Anyone whose place changed is briefly highlighted, so a busy desk
+        // notices the queue moving instead of having to re-read it.
+        var before = _queue?.Waiting.ToDictionary(w => w.TicketId, w => w.Position)
+            ?? new Dictionary<Guid, int?>();
+
+        _changed = dto.Waiting
+            .Where(w => before.TryGetValue(w.TicketId, out var was) && was != w.Position)
+            .Select(w => w.TicketId)
+            .ToHashSet();
+
+        _queue = dto;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshCountsAsync()
+    {
+        _departments = await Api.GetDepartmentsAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OnEmergency(EmergencyAlertDto alert)
+    {
+        _alerts.Insert(0, alert);
+
+        // Three is enough to notice; more turns the console into a wall of red.
+        while (_alerts.Count > 3)
+        {
+            _alerts.RemoveAt(_alerts.Count - 1);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task CallAsync(QueueEntryDto entry, string? room) =>
+        string.IsNullOrEmpty(room)
+            ? Task.CompletedTask
+            : RunAsync(() => Api.CallAsync(entry.TicketId, room));
+
+    private Task EscalateAsync(QueueEntryDto entry) =>
+        RunAsync(() => Api.SetPriorityAsync(entry.TicketId, TicketPriority.Emergency));
+
+    private Task NoShowAsync(QueueEntryDto entry) =>
+        RunAsync(() => Api.NoShowAsync(entry.TicketId));
+
+    private Task TransferAsync(QueueEntryDto entry, string? departmentId) =>
+        string.IsNullOrEmpty(departmentId) || !int.TryParse(departmentId, out var id)
+            ? Task.CompletedTask
+            : RunAsync(() => Api.TransferAsync(entry.TicketId, id));
+
+    /// <summary>
+    /// Runs a command and surfaces the server's own refusal. The queue is not
+    /// reloaded here: the broadcast that follows a successful write does that.
+    /// </summary>
+    private async Task RunAsync(Func<Task> command)
+    {
+        _error = null;
+
+        try
+        {
+            await command();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.QueueUpdated -= OnQueueUpdated;
+        Hub.EmergencyFlagged -= OnEmergency;
+        await Hub.StopWatchingDepartmentAsync(_departmentId);
+    }
+}

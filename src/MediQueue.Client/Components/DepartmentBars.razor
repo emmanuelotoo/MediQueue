@@ -1,0 +1,49 @@
+@*
+    Department comparison: one measure across named categories, so horizontal
+    bars — the names read straight across, and the ordering does the comparing.
+    One hue, because rank is already carried by position.
+*@
+
+<figure class="chart">
+    <figcaption class="chart__head">
+        <span class="chart__title">@Title</span>
+        <span class="chart__note faint">@Unit</span>
+    </figcaption>
+
+    @if (Rows.Count == 0)
+    {
+        <p class="chart__empty">No activity in this range.</p>
+    }
+    else
+    {
+        <div class="bars" role="img" aria-label="@AriaLabel">
+            @foreach (var row in Ordered)
+            {
+                <div class="bars__row">
+                    <span class="bars__name">@row.Label</span>
+                    <div class="bars__track">
+                        <div class="bars__fill" style="width:@(Percent(row.Value))%"></div>
+                    </div>
+                    <span class="bars__value data">@row.Display</span>
+                </div>
+            }
+        </div>
+    }
+</figure>
+
+@code {
+    public record Row(string Label, double Value, string Display);
+
+    [Parameter, EditorRequired] public IReadOnlyList<Row> Rows { get; set; } = [];
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Unit { get; set; }
+
+    private IEnumerable<Row> Ordered => Rows.OrderByDescending(r => r.Value);
+
+    private double Peak => Math.Max(0.001, Rows.Max(r => r.Value));
+
+    private double Percent(double value) => Math.Max(1.5, 100 * value / Peak);
+
+    private string AriaLabel =>
+        $"{Title} by department. " + string.Join("; ", Ordered.Select(r => $"{r.Label} {r.Display}"));
+}

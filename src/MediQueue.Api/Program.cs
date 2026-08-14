@@ -31,6 +31,7 @@ if (string.IsNullOrWhiteSpace(jwt.Key))
 builder.Services.AddSingleton(jwt);
 builder.Services.AddSingleton<ITokenService, TokenService>();
 builder.Services.AddScoped<IQueueService, QueueService>();
+builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

@@ -1,0 +1,83 @@
+@*
+    One patient per row, for both staff consoles. Which actions appear is the
+    caller's business; the row only knows how to present a patient.
+*@
+
+@if (Entries.Count == 0)
+{
+    <EmptyState Title="@EmptyTitle" Note="@EmptyNote" />
+}
+else
+{
+    <div class="queue">
+        @foreach (var entry in Entries)
+        {
+            <div class="queue__row @RowClass(entry)" @key="entry.TicketId">
+                <div class="queue__position">
+                    @(entry.Position?.ToString() ?? "—")
+                </div>
+
+                <div>
+                    <TicketCode Code="@entry.TicketCode" />
+                </div>
+
+                <div class="queue__identity">
+                    <div class="queue__name">@entry.PatientName</div>
+                    <div class="queue__meta">
+                        <span class="data">@entry.MedicalRecordNumber</span>
+                        <span class="data">waiting @entry.WaitedMinutes min</span>
+                        @if (entry.AssignedStaffName is not null)
+                        {
+                            <span>@entry.AssignedStaffName</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="queue__actions">
+                    <PriorityBadge Priority="entry.Priority" />
+
+                    @if (entry.RoomNumber is not null)
+                    {
+                        <span class="room-chip">Room <strong>@entry.RoomNumber</strong></span>
+                    }
+
+                    @if (ShowStatus)
+                    {
+                        <StatusBadge Status="entry.Status" />
+                    }
+
+                    @Actions?.Invoke(entry)
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<QueueEntryDto> Entries { get; set; } = [];
+
+    [Parameter] public RenderFragment<QueueEntryDto>? Actions { get; set; }
+
+    [Parameter] public bool ShowStatus { get; set; }
+
+    [Parameter] public string EmptyTitle { get; set; } = "Nobody is waiting";
+
+    [Parameter] public string? EmptyNote { get; set; }
+
+    /// <summary>Ticket ids that just moved, briefly highlighted so the change is seen.</summary>
+    [Parameter] public IReadOnlySet<Guid>? RecentlyChanged { get; set; }
+
+    private string RowClass(QueueEntryDto entry)
+    {
+        var priority = entry.Priority switch
+        {
+            TicketPriority.Emergency => "queue__row--emergency",
+            TicketPriority.Priority => "queue__row--priority",
+            _ => string.Empty
+        };
+
+        return RecentlyChanged?.Contains(entry.TicketId) == true
+            ? $"{priority} queue__row--advanced"
+            : priority;
+    }
+}

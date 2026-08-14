@@ -1,0 +1,90 @@
+@*
+    Daily volume: two series over time, so a line chart with a legend and a
+    tick label per gridline. Colours come from the validated chart palette, and
+    the two series also differ in marker shape, so identity never rests on hue
+    alone.
+
+    Axis labels are HTML rather than SVG <text>: Razor reserves that tag name.
+    The label column and the plot share a height, so space-between lands each
+    label exactly on its gridline.
+*@
+
+<figure class="chart">
+    <figcaption class="chart__head">
+        <span class="chart__title">@Title</span>
+        <span class="chart__legend">
+            <span class="chart__key"><span class="chart__swatch chart__swatch--a"></span>Checked in</span>
+            <span class="chart__key"><span class="chart__swatch chart__swatch--b"></span>Seen</span>
+        </span>
+    </figcaption>
+
+    @if (Points.Count < 2)
+    {
+        <p class="chart__empty">Not enough days in this range to draw a trend.</p>
+    }
+    else
+    {
+        <div class="chart__plot">
+            <div class="chart__ticks">
+                <span class="data">@Peak</span>
+                <span class="data">@(Peak / 2)</span>
+                <span class="data">0</span>
+            </div>
+
+            <svg class="chart__svg" viewBox="0 0 @Width @Height" role="img"
+                 aria-label="@AriaLabel" preserveAspectRatio="none">
+                @* Recessive: present enough to read a value against, quiet
+                   enough that the data stays the loudest thing here. *@
+                <line class="chart__grid" x1="0" y1="1" x2="@Width" y2="1" />
+                <line class="chart__grid" x1="0" y1="@(Height / 2)" x2="@Width" y2="@(Height / 2)" />
+                <line class="chart__grid" x1="0" y1="@(Height - 1)" x2="@Width" y2="@(Height - 1)" />
+
+                <polyline class="chart__line chart__line--a" points="@Series(p => p.CheckIns)" />
+                <polyline class="chart__line chart__line--b" points="@Series(p => p.Completed)" />
+
+                @for (var i = 0; i < Points.Count; i++)
+                {
+                    var point = Points[i];
+                    <circle class="chart__dot chart__dot--a" cx="@F(X(i))" cy="@F(Y(point.CheckIns))" r="3">
+                        <title>@point.Date.ToString("ddd d MMM"): @point.CheckIns checked in</title>
+                    </circle>
+                    <rect class="chart__dot chart__dot--b" x="@F(X(i) - 2.5)" y="@F(Y(point.Completed) - 2.5)"
+                          width="5" height="5">
+                        <title>@point.Date.ToString("ddd d MMM"): @point.Completed seen</title>
+                    </rect>
+                }
+            </svg>
+        </div>
+
+        <div class="chart__axis">
+            <span>@Points[0].Date.ToString("d MMM")</span>
+            <span>@Points[^1].Date.ToString("d MMM")</span>
+        </div>
+    }
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DailyVolumeDto> Points { get; set; } = [];
+    [Parameter] public string Title { get; set; } = "Daily volume";
+
+    private const int Width = 720;
+    private const int Height = 180;
+
+    private int Peak => Math.Max(1, Points.Max(p => Math.Max(p.CheckIns, p.Completed)));
+
+    private double X(int index) =>
+        Points.Count == 1 ? Width / 2.0 : (double)index / (Points.Count - 1) * Width;
+
+    /// <summary>Inset by the marker radius so dots are never clipped at the edge.</summary>
+    private double Y(int value) => 4 + (Height - 8) * (1 - (double)value / Peak);
+
+    private static string F(double value) =>
+        value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Series(Func<DailyVolumeDto, int> select) =>
+        string.Join(' ', Points.Select((p, i) => $"{F(X(i))},{F(Y(select(p)))}"));
+
+    private string AriaLabel =>
+        $"Daily check-ins and completed consultations from {Points[0].Date:d MMMM} to {Points[^1].Date:d MMMM}, "
+        + $"peaking at {Peak} in one day.";
+}

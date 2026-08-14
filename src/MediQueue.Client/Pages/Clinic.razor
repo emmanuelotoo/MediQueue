@@ -1,0 +1,238 @@
+@page "/clinic"
+@attribute [Authorize(Policy = Policies.TreatPatients)]
+@implements IAsyncDisposable
+@inject MediQueueApi Api
+@inject QueueHubClient Hub
+@inject MediQueueAuthStateProvider Auth
+
+<PageTitle>Clinic — MediQueue</PageTitle>
+
+@*
+    The clinician's screen answers one question at a time: who is in my room
+    now, and who is next. Everything else is secondary.
+*@
+
+<div class="page-head">
+    <div>
+        <span class="eyebrow">@(_queue?.DepartmentName ?? "Clinic")</span>
+        <h1 class="page-head__title">Consultation workstation</h1>
+    </div>
+    <div class="page-head__aside">
+        <LiveIndicator />
+        @if (_departments.Count > 1)
+        {
+            <select class="select" style="width:auto;" aria-label="Department"
+                    @onchange="e => SwitchAsync(e.Value?.ToString())">
+                @foreach (var department in _departments)
+                {
+                    <option value="@department.Id" selected="@(department.Id == _departmentId)">
+                        @department.Name
+                    </option>
+                }
+            </select>
+        }
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert--emergency" role="alert" style="margin-bottom:var(--space-5);">@_error</div>
+}
+
+<div class="stack">
+    <section class="panel">
+        <div class="panel__head">
+            <span class="panel__title">With you now</span>
+            <span class="panel__count">@(_queue?.InProgress.Count ?? 0)</span>
+        </div>
+
+        <div class="panel__body panel__body--flush">
+            @if (_queue is null)
+            {
+                <div class="panel__body stack">
+                    <div class="skeleton"></div>
+                    <div class="skeleton" style="width:70%;"></div>
+                </div>
+            }
+            else
+            {
+                <QueueTable Entries="_queue.InProgress" ShowStatus="true"
+                            EmptyTitle="No patient in your room"
+                            EmptyNote="Reception calls patients through; they appear here.">
+                    <Actions Context="entry">
+                        @if (entry.Status == TicketStatus.Called)
+                        {
+                            <button class="btn btn--small btn--primary" @onclick="() => StartAsync(entry)">
+                                Start consultation
+                            </button>
+                            <button class="btn btn--small btn--quiet" @onclick="() => NoShowAsync(entry)">
+                                Did not attend
+                            </button>
+                        }
+                        else if (entry.Status == TicketStatus.InConsultation)
+                        {
+                            <button class="btn btn--small btn--primary" @onclick="() => CompleteAsync(entry)">
+                                Complete
+                            </button>
+                        }
+                    </Actions>
+                </QueueTable>
+            }
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel__head">
+            <span class="panel__title">Waiting to be seen</span>
+            <span class="panel__count">@(_queue?.Waiting.Count ?? 0)</span>
+        </div>
+
+        <div class="panel__body panel__body--flush">
+            @if (_queue is not null)
+            {
+                <QueueTable Entries="_queue.Waiting" RecentlyChanged="_changed"
+                            EmptyTitle="The queue is clear"
+                            EmptyNote="Nobody is waiting for this department right now.">
+                    <Actions Context="entry">
+                        <select class="select select--inline" aria-label="Call to room"
+                                @onchange="e => CallAsync(entry, e.Value?.ToString())">
+                            <option value="">Call to…</option>
+                            @for (var room = 1; room <= RoomCount; room++)
+                            {
+                                <option value="@room">Room @room</option>
+                            }
+                        </select>
+
+                        @* Escalation applies to someone still in the queue: a
+                           clinician who sees a waiting patient deteriorating
+                           moves them to the front and alerts the front desk. *@
+                        @if (entry.Priority is not TicketPriority.Emergency)
+                        {
+                            <button class="btn btn--small btn--danger"
+                                    title="Move to the front and alert reception"
+                                    @onclick="() => EscalateAsync(entry)">
+                                Flag emergency
+                            </button>
+                        }
+                    </Actions>
+                </QueueTable>
+            }
+        </div>
+    </section>
+
+    @if (_queue is not null)
+    {
+        <div class="stats">
+            <StatCard Label="Seen today" Value="@_queue.CompletedToday.ToString()" />
+            <StatCard Label="Still waiting" Value="@_queue.Waiting.Count.ToString()" />
+            <StatCard Label="Average wait"
+                      Value="@(_queue.AverageWaitMinutes?.ToString() ?? "—")" Unit=" min"
+                      Note="Time patients waited before being called." />
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<DepartmentDto> _departments = [];
+    private DepartmentQueueDto? _queue;
+    private int _departmentId;
+    private string? _error;
+    private HashSet<Guid> _changed = [];
+
+    private int RoomCount =>
+        _departments.FirstOrDefault(d => d.Id == _departmentId)?.ConsultationRooms ?? 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _departments = await Api.GetDepartmentsAsync();
+
+        // A clinician lands on their own department; an admin gets the first.
+        _departmentId = Auth.Session?.DepartmentId
+            ?? _departments.FirstOrDefault()?.Id
+            ?? 0;
+
+        Hub.QueueUpdated += OnQueueUpdated;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_departmentId == 0)
+        {
+            return;
+        }
+
+        _queue = await Api.GetQueueAsync(_departmentId);
+        await Hub.WatchDepartmentAsync(_departmentId);
+    }
+
+    private async Task SwitchAsync(string? departmentId)
+    {
+        if (!int.TryParse(departmentId, out var id) || id == _departmentId)
+        {
+            return;
+        }
+
+        await Hub.StopWatchingDepartmentAsync(_departmentId);
+        _departmentId = id;
+        _queue = null;
+        await LoadAsync();
+    }
+
+    private void OnQueueUpdated(DepartmentQueueDto dto)
+    {
+        if (dto.DepartmentId != _departmentId)
+        {
+            return;
+        }
+
+        var before = _queue?.Waiting.ToDictionary(w => w.TicketId, w => w.Position)
+            ?? new Dictionary<Guid, int?>();
+
+        _changed = dto.Waiting
+            .Where(w => before.TryGetValue(w.TicketId, out var was) && was != w.Position)
+            .Select(w => w.TicketId)
+            .ToHashSet();
+
+        _queue = dto;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private Task CallAsync(QueueEntryDto entry, string? room) =>
+        string.IsNullOrEmpty(room)
+            ? Task.CompletedTask
+            : RunAsync(() => Api.CallAsync(entry.TicketId, room));
+
+    private Task StartAsync(QueueEntryDto entry) => RunAsync(() => Api.StartAsync(entry.TicketId));
+
+    private Task CompleteAsync(QueueEntryDto entry) => RunAsync(() => Api.CompleteAsync(entry.TicketId));
+
+    private Task NoShowAsync(QueueEntryDto entry) => RunAsync(() => Api.NoShowAsync(entry.TicketId));
+
+    /// <summary>
+    /// Escalating from the point of care alerts the front desk instantly, which
+    /// is the whole reason a clinician can change priority at all.
+    /// </summary>
+    private Task EscalateAsync(QueueEntryDto entry) =>
+        RunAsync(() => Api.SetPriorityAsync(entry.TicketId, TicketPriority.Emergency));
+
+    private async Task RunAsync(Func<Task> command)
+    {
+        _error = null;
+
+        try
+        {
+            await command();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.QueueUpdated -= OnQueueUpdated;
+        await Hub.StopWatchingDepartmentAsync(_departmentId);
+    }
+}

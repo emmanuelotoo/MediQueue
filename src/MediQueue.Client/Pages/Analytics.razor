@@ -1,0 +1,186 @@
+@page "/analytics"
+@attribute [Authorize(Policy = Policies.ViewAnalytics)]
+@inject MediQueueApi Api
+@inject NavigationManager Navigation
+
+<PageTitle>Reports — MediQueue</PageTitle>
+
+<div class="page-head">
+    <div>
+        <span class="eyebrow">Outpatient reporting</span>
+        <h1 class="page-head__title">How the department is running</h1>
+    </div>
+
+    <div class="page-head__aside">
+        @* Filters sit in one row above the charts, and change all of them. *@
+        <div class="range" role="group" aria-label="Date range">
+            @foreach (var option in Ranges)
+            {
+                <button class="range__option @(option.Days == _days ? "range__option--on" : null)"
+                        @onclick="() => SelectAsync(option.Days)">
+                    @option.Label
+                </button>
+            }
+        </div>
+
+        <a class="btn btn--quiet" href="@ExportUrl" target="_blank" rel="noopener">Export CSV</a>
+    </div>
+</div>
+
+@if (_summary is null)
+{
+    <div class="stats">
+        @for (var i = 0; i < 4; i++)
+        {
+            <div class="stat"><div class="skeleton" style="height:3rem;"></div></div>
+        }
+    </div>
+}
+else
+{
+    <div class="stack">
+        <div class="stats">
+            <StatCard Label="Patients seen" Value="@_summary.Completed.ToString()"
+                      Note="@($"of {_summary.TotalCheckIns} checked in")" />
+            <StatCard Label="Average wait"
+                      Value="@(_summary.AverageWaitMinutes?.ToString() ?? "—")" Unit=" min"
+                      Note="@($"longest {_summary.LongestWaitMinutes?.ToString() ?? "—"} min")" />
+            <StatCard Label="Average consultation"
+                      Value="@(_summary.AverageConsultationMinutes?.ToString() ?? "—")" Unit=" min" />
+            <StatCard Label="Did not attend" Value="@_summary.NoShows.ToString()"
+                      Note="@($"{_summary.NoShowRate}% of those called")" />
+        </div>
+
+        <div class="panel">
+            <div class="panel__body">
+                <TrendChart Points="_summary.DailyVolume" />
+            </div>
+        </div>
+
+        <div class="split">
+            <div class="panel">
+                <div class="panel__body">
+                    <HourlyChart Hours="_summary.HourlyVolume" />
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel__body">
+                    <DepartmentBars Title="Patients seen" Unit="Completed consultations"
+                                    Rows="@CompletedByDepartment" />
+                </div>
+            </div>
+        </div>
+
+        <div class="split">
+            <div class="panel">
+                <div class="panel__body">
+                    <DepartmentBars Title="Average wait" Unit="Minutes before being called"
+                                    Rows="@WaitByDepartment" />
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel__body">
+                    <DepartmentBars Title="Throughput" Unit="Patients per hour open"
+                                    Rows="@ThroughputByDepartment" />
+                </div>
+            </div>
+        </div>
+
+        @* The table view: every figure above, readable without seeing colour. *@
+        <section class="panel">
+            <div class="panel__head">
+                <span class="panel__title">Department detail</span>
+                <span class="panel__count">@_summary.Departments.Count</span>
+            </div>
+
+            <div class="panel__body" style="overflow-x:auto;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Department</th>
+                            <th scope="col">Checked in</th>
+                            <th scope="col">Seen</th>
+                            <th scope="col">No shows</th>
+                            <th scope="col">Avg wait</th>
+                            <th scope="col">Avg consultation</th>
+                            <th scope="col">Per hour</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var department in _summary.Departments)
+                        {
+                            <tr>
+                                <th scope="row">@department.DepartmentName</th>
+                                <td class="data">@department.CheckIns</td>
+                                <td class="data">@department.Completed</td>
+                                <td class="data">@department.NoShows</td>
+                                <td class="data">@(department.AverageWaitMinutes?.ToString() ?? "—")</td>
+                                <td class="data">@(department.AverageConsultationMinutes?.ToString() ?? "—")</td>
+                                <td class="data">@department.ThroughputPerHour.ToString("0.0")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <p class="faint" style="font-size:var(--text-xs);">
+            @_summary.From.ToString("d MMMM yyyy") to @_summary.To.ToString("d MMMM yyyy").
+            @_summary.StillWaiting still waiting, @_summary.Cancelled left before being seen.
+        </p>
+    </div>
+}
+
+@code {
+    private record RangeOption(int Days, string Label);
+
+    private static readonly RangeOption[] Ranges =
+    [
+        new(1, "Today"),
+        new(7, "7 days"),
+        new(30, "30 days")
+    ];
+
+    private AnalyticsSummaryDto? _summary;
+    private int _days = 7;
+
+    private DateOnly To => DateOnly.FromDateTime(DateTime.UtcNow);
+    private DateOnly From => To.AddDays(-(_days - 1));
+
+    private string ExportUrl => $"api/analytics/export?from={From:yyyy-MM-dd}&to={To:yyyy-MM-dd}";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task SelectAsync(int days)
+    {
+        _days = days;
+        _summary = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _summary = await Api.GetAnalyticsAsync(From, To);
+
+    private IReadOnlyList<DepartmentBars.Row> CompletedByDepartment =>
+        _summary?.Departments
+            .Select(d => new DepartmentBars.Row(d.DepartmentName, d.Completed, d.Completed.ToString()))
+            .ToList() ?? [];
+
+    private IReadOnlyList<DepartmentBars.Row> WaitByDepartment =>
+        _summary?.Departments
+            .Where(d => d.AverageWaitMinutes is not null)
+            .Select(d => new DepartmentBars.Row(
+                d.DepartmentName,
+                d.AverageWaitMinutes!.Value,
+                $"{d.AverageWaitMinutes} min"))
+            .ToList() ?? [];
+
+    private IReadOnlyList<DepartmentBars.Row> ThroughputByDepartment =>
+        _summary?.Departments
+            .Select(d => new DepartmentBars.Row(
+                d.DepartmentName,
+                d.ThroughputPerHour,
+                d.ThroughputPerHour.ToString("0.0")))
+            .ToList() ?? [];
+}

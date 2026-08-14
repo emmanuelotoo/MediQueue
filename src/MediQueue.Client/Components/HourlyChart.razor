@@ -1,0 +1,43 @@
+@*
+    Arrivals by hour: one series of magnitudes, so a single hue and no legend —
+    the title names the series. The point of this chart is the morning peak, so
+    the busiest hour is labelled directly rather than every bar.
+*@
+
+<figure class="chart">
+    <figcaption class="chart__head">
+        <span class="chart__title">When patients arrive</span>
+        <span class="chart__note faint">Busiest at @PeakHour.Hour:00</span>
+    </figcaption>
+
+    <div class="hours" role="img" aria-label="@AriaLabel">
+        @foreach (var hour in Hours)
+        {
+            <div class="hours__col" title="@hour.Hour:00 — @hour.CheckIns arrivals">
+                <div class="hours__bar @(hour.Hour == PeakHour.Hour ? "hours__bar--peak" : null)"
+                     style="height:@(Height(hour))%"></div>
+                <span class="hours__label data">@hour.Hour</span>
+            </div>
+        }
+    </div>
+</figure>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<HourlyVolumeDto> Hours { get; set; } = [];
+
+    private int Peak => Math.Max(1, Hours.Count == 0 ? 1 : Hours.Max(h => h.CheckIns));
+
+    private HourlyVolumeDto PeakHour =>
+        Hours.OrderByDescending(h => h.CheckIns).FirstOrDefault() ?? new HourlyVolumeDto();
+
+    /// <summary>
+    /// A floor of 2% so an hour with no arrivals still reads as a measured zero
+    /// rather than a gap where a bar failed to render.
+    /// </summary>
+    private double Height(HourlyVolumeDto hour) =>
+        Math.Max(2, 100.0 * hour.CheckIns / Peak);
+
+    private string AriaLabel =>
+        "Check-ins by hour of day. Busiest hour "
+        + $"{PeakHour.Hour}:00 with {PeakHour.CheckIns} arrivals.";
+}
