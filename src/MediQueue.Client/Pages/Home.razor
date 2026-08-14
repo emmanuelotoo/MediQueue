@@ -1,7 +1,82 @@
-﻿@page "/"
+@page "/"
+@inject MediQueueApi Api
+@inject SessionStore Session
+@inject NavigationManager Navigation
 
-<PageTitle>Home</PageTitle>
+<PageTitle>MediQueue</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="stack">
+    <div>
+        <span class="eyebrow">Outpatient department</span>
+        <h1 class="page-head__title">Join the queue from where you are.</h1>
+        <p class="page-head__lede">
+            Check in on this screen or your own phone, then watch your place in the
+            queue instead of watching the door.
+        </p>
+    </div>
 
-Welcome to your new app.
+    @if (_heldTicket is not null)
+    {
+        <div class="panel">
+            <div class="panel__body row" style="justify-content:space-between;">
+                <div>
+                    <span class="eyebrow">Your ticket today</span>
+                    <TicketCode Code="@_heldTicket" />
+                </div>
+                <a class="btn btn--primary" href="@($"/ticket/{_heldTicket}")">See my place</a>
+            </div>
+        </div>
+    }
+
+    <a class="btn btn--primary btn--kiosk" href="/checkin">Check in now</a>
+
+    <div class="panel">
+        <div class="panel__head">
+            <span class="panel__title">How busy each department is</span>
+        </div>
+
+        @if (_departments is null)
+        {
+            <div class="panel__body stack">
+                <div class="skeleton"></div>
+                <div class="skeleton" style="width:70%;"></div>
+                <div class="skeleton" style="width:85%;"></div>
+            </div>
+        }
+        else
+        {
+            <div class="queue">
+                @foreach (var department in _departments)
+                {
+                    <div class="queue__row" style="grid-template-columns: 1fr auto;">
+                        <div class="queue__identity">
+                            <div class="queue__name">@department.Name</div>
+                            <div class="queue__meta">
+                                <span class="data">@department.WaitingCount waiting</span>
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <WaitTime Minutes="@department.EstimatedWaitMinutes" ZeroText="No wait" />
+                            <div class="queue__meta" style="justify-content:flex-end;">estimated</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <p class="faint" style="font-size:var(--text-sm);">
+        Already have a ticket code? <a href="/track">Look it up</a>.
+    </p>
+</div>
+
+@code {
+    private IReadOnlyList<DepartmentDto>? _departments;
+    private string? _heldTicket;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _heldTicket = await Session.GetTicketCodeAsync();
+        _departments = await Api.GetDepartmentsAsync();
+    }
+}

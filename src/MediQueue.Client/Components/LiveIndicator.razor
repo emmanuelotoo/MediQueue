@@ -1,0 +1,44 @@
+@implements IDisposable
+@inject QueueHubClient Hub
+
+@*
+    Tells the user whether what they are looking at is still arriving by itself.
+    A staff console that has silently stopped updating is worse than one that
+    admits it, so the state is always on screen.
+*@
+<span class="live @StateClass" title="@Title">
+    <span class="live__dot"></span>
+    @Label
+</span>
+
+@code {
+    protected override void OnInitialized() => Hub.StateChanged += OnStateChanged;
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private string StateClass => Hub.State switch
+    {
+        LiveState.Live => "live--on",
+        LiveState.Lost => "live--lost",
+        _ => "live--off"
+    };
+
+    private string Label => Hub.State switch
+    {
+        LiveState.Live => "Live",
+        LiveState.Connecting => "Connecting",
+        LiveState.Reconnecting => "Reconnecting",
+        LiveState.Lost => "Offline",
+        _ => "Idle"
+    };
+
+    private string Title => Hub.State switch
+    {
+        LiveState.Live => "Updating automatically.",
+        LiveState.Reconnecting => "Connection dropped; trying again.",
+        LiveState.Lost => "Not updating. Refresh to get the latest.",
+        _ => "Waiting to connect."
+    };
+
+    public void Dispose() => Hub.StateChanged -= OnStateChanged;
+}

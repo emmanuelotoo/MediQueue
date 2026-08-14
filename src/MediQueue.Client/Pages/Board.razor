@@ -1,0 +1,110 @@
+@page "/board/{DepartmentId:int}"
+@implements IAsyncDisposable
+@inject MediQueueApi Api
+@inject QueueHubClient Hub
+
+<PageTitle>@(_board?.DepartmentName ?? "Board") — MediQueue</PageTitle>
+
+@*
+    A fixture on a waiting-room wall, read from across the room by people who
+    are anxious and possibly unwell. No navigation, no chrome, nothing to click,
+    and no names — only the codes on their slips.
+*@
+
+<div class="board" data-theme="dark">
+    <header class="board__head">
+        <div>
+            <span class="board__eyebrow">Now serving</span>
+            <h1 class="board__department">@(_board?.DepartmentName ?? "Loading")</h1>
+        </div>
+        <div class="board__clock data">@_now.ToString("HH:mm")</div>
+    </header>
+
+    @if (_board is null)
+    {
+        <div class="board__empty">Connecting…</div>
+    }
+    else if (_board.NowServing.Count == 0)
+    {
+        <div class="board__empty">
+            No one is being called right now.
+            @if (_board.WaitingCount > 0)
+            {
+                <span class="board__empty-note">@_board.WaitingCount waiting</span>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="board__serving">
+            @foreach (var entry in _board.NowServing)
+            {
+                <div class="serving" @key="entry.TicketCode">
+                    <TicketCode Code="@entry.TicketCode" Class="serving__code" />
+                    <div class="serving__room">
+                        <span>Room</span>
+                        <strong class="data">@entry.RoomNumber</strong>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    @if (_board?.UpNext.Count > 0)
+    {
+        <footer class="board__next">
+            <span class="board__eyebrow">Up next</span>
+            <div class="board__next-list">
+                @* Not named "code": Razor would read @code as the directive. *@
+                @foreach (var upcoming in _board.UpNext)
+                {
+                    <TicketCode Code="@upcoming" Class="board__next-code" @key="upcoming" />
+                }
+            </div>
+        </footer>
+    }
+</div>
+
+@code {
+    [Parameter] public int DepartmentId { get; set; }
+
+    private BoardDto? _board;
+    private DateTimeOffset _now = DateTimeOffset.Now;
+    private Timer? _clock;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _board = await Api.GetBoardAsync(DepartmentId);
+
+        Hub.BoardUpdated += OnBoardUpdated;
+        await Hub.WatchBoardAsync(DepartmentId);
+
+        // The wall clock is the only thing on this screen that ticks on its own.
+        _clock ??= new Timer(_ =>
+        {
+            _now = DateTimeOffset.Now;
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.Zero, TimeSpan.FromSeconds(20));
+    }
+
+    private void OnBoardUpdated(BoardDto dto)
+    {
+        if (dto.DepartmentId != DepartmentId)
+        {
+            return;
+        }
+
+        _board = dto;
+        InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Hub.BoardUpdated -= OnBoardUpdated;
+
+        if (_clock is not null)
+        {
+            await _clock.DisposeAsync();
+        }
+    }
+}

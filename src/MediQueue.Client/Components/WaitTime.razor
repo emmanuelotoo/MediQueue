@@ -1,0 +1,33 @@
+@*
+    Renders a duration the way a person says it: "about 25 min", "just over an
+    hour". Precision beyond that is false comfort in a waiting room.
+*@
+<span class="data">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public int? Minutes { get; set; }
+
+    /// <summary>Wording for the zero case, which differs by context.</summary>
+    [Parameter] public string ZeroText { get; set; } = "Next";
+
+    private string Text
+    {
+        get
+        {
+            if (Minutes is null)
+            {
+                return "—";
+            }
+
+            var minutes = Minutes.Value;
+
+            return minutes switch
+            {
+                <= 0 => ZeroText,
+                < 60 => $"{minutes} min",
+                < 120 => $"about 1 hr {minutes % 60} min",
+                _ => $"about {minutes / 60} hr {minutes % 60} min"
+            };
+        }
+    }
+}

@@ -1,0 +1,32 @@
+@* The signature element of the system: department prefix dimmed, number bold. *@
+
+<span class="code @(Hero ? "code--hero" : null) @Class">
+    @if (Split.Prefix is not null)
+    {
+        <span class="code__prefix">@Split.Prefix</span><span>@Split.Number</span>
+    }
+    else
+    {
+        @Code
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Code { get; set; } = string.Empty;
+
+    /// <summary>Wall-display scale, for the kiosk confirmation and the board.</summary>
+    [Parameter] public bool Hero { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private (string? Prefix, string Number) Split
+    {
+        get
+        {
+            var dash = Code.IndexOf('-');
+            return dash <= 0
+                ? (null, Code)
+                : (Code[..(dash + 1)], Code[(dash + 1)..]);
+        }
+    }
+}

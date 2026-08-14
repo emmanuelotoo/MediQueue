@@ -1,0 +1,55 @@
+@page "/track"
+@inject NavigationManager Navigation
+@inject SessionStore Session
+
+<PageTitle>Find my ticket — MediQueue</PageTitle>
+
+<div class="stack">
+    <div>
+        <span class="eyebrow">Already checked in</span>
+        <h1 class="page-head__title">Enter your ticket code</h1>
+        <p class="page-head__lede">It is printed on your slip, like <span class="code">GEN-014</span>.</p>
+    </div>
+
+    @if (_remembered is not null)
+    {
+        <a class="btn btn--quiet btn--kiosk" href="@($"/ticket/{_remembered}")">
+            Continue with @_remembered
+        </a>
+    }
+
+    <form @onsubmit="Go" @onsubmit:preventDefault>
+        <label class="field">
+            <span class="visually-hidden">Ticket code</span>
+            <input class="input input--kiosk code" @bind="_code" @bind:event="oninput"
+                   placeholder="GEN-014" autocapitalize="characters" autocomplete="off"
+                   aria-label="Ticket code" />
+        </label>
+
+        <button type="submit" class="btn btn--primary btn--kiosk" disabled="@(!IsUsable)">
+            Find my place
+        </button>
+    </form>
+
+    <p class="faint" style="font-size:var(--text-sm);">
+        Not checked in yet? <a href="/checkin">Check in here</a>.
+    </p>
+</div>
+
+@code {
+    private string _code = string.Empty;
+    private string? _remembered;
+
+    protected override async Task OnInitializedAsync() =>
+        _remembered = await Session.GetTicketCodeAsync();
+
+    private bool IsUsable => _code.Trim().Length >= 4;
+
+    private void Go()
+    {
+        if (IsUsable)
+        {
+            Navigation.NavigateTo($"/ticket/{_code.Trim().ToUpperInvariant()}");
+        }
+    }
+}

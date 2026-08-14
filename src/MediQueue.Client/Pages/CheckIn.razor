@@ -1,0 +1,193 @@
+@page "/checkin"
+@inject MediQueueApi Api
+@inject SessionStore Session
+@inject NavigationManager Navigation
+
+<PageTitle>Check in — MediQueue</PageTitle>
+
+@*
+    Department first, then details. A kiosk user answers "which clinic?" far
+    faster than "what is your folder number?", and choosing the department up
+    front means the wait shown on the next screen is already the real one.
+*@
+
+<div class="wizard">
+    <ol class="wizard__steps" aria-label="Check-in progress">
+        <li class="@StepClass(Step.Department)"><span>1</span> Department</li>
+        <li class="@StepClass(Step.Details)"><span>2</span> Your details</li>
+        <li class="@StepClass(Step.Done)"><span>3</span> Ticket</li>
+    </ol>
+
+    @switch (_step)
+    {
+        case Step.Department:
+            <section class="stack">
+                <div>
+                    <span class="eyebrow">Step 1 of 3</span>
+                    <h1 class="page-head__title">Which clinic are you here for?</h1>
+                </div>
+
+                @if (_departments is null)
+                {
+                    <div class="stack">
+                        <div class="skeleton" style="height:4.5rem;"></div>
+                        <div class="skeleton" style="height:4.5rem;"></div>
+                        <div class="skeleton" style="height:4.5rem;"></div>
+                    </div>
+                }
+                else
+                {
+                    <div class="choices">
+                        @foreach (var department in _departments)
+                        {
+                            <button type="button"
+                                    class="choice @(_form.DepartmentId == department.Id ? "choice--on" : null)"
+                                    @onclick="() => ChooseDepartment(department)">
+                                <span class="choice__name">@department.Name</span>
+                                <span class="choice__meta">
+                                    <span class="data">@department.WaitingCount waiting</span>
+                                    <span aria-hidden="true">·</span>
+                                    <WaitTime Minutes="@department.EstimatedWaitMinutes" ZeroText="seen now" />
+                                </span>
+                            </button>
+                        }
+                    </div>
+                }
+            </section>
+            break;
+
+        case Step.Details:
+            <section class="stack">
+                <div>
+                    <span class="eyebrow">Step 2 of 3 · @_chosen?.Name</span>
+                    <h1 class="page-head__title">Who is being seen?</h1>
+                </div>
+
+                <EditForm Model="_form" OnValidSubmit="SubmitAsync" FormName="checkin">
+                    <DataAnnotationsValidator />
+
+                    <label class="field">
+                        <span class="field__label">Full name</span>
+                        <InputText class="input input--kiosk" @bind-Value="_form.FullName"
+                                   autocomplete="name" placeholder="Ama Boateng" />
+                        <ValidationMessage For="() => _form.FullName" />
+                    </label>
+
+                    <label class="field">
+                        <span class="field__label">Phone number</span>
+                        <InputText class="input input--kiosk" @bind-Value="_form.PhoneNumber"
+                                   type="tel" inputmode="tel" autocomplete="tel" placeholder="0244123456" />
+                        <span class="field__hint">We use this to find your records if you have been here before.</span>
+                        <ValidationMessage For="() => _form.PhoneNumber" />
+                    </label>
+
+                    <label class="field">
+                        <span class="field__label">
+                            Folder number <span class="faint">(optional)</span>
+                        </span>
+                        <InputText class="input input--kiosk" @bind-Value="_form.MedicalRecordNumber"
+                                   placeholder="MRN-00042" />
+                        <span class="field__hint">Leave blank if this is your first visit.</span>
+                    </label>
+
+                    @if (_error is not null)
+                    {
+                        <div class="alert alert--emergency" role="alert">@_error</div>
+                    }
+
+                    <div class="row" style="margin-top:var(--space-5);">
+                        <button type="button" class="btn btn--quiet" @onclick="() => _step = Step.Department">
+                            Back
+                        </button>
+                        <button type="submit" class="btn btn--primary btn--kiosk" style="flex:1;"
+                                disabled="@_busy">
+                            @(_busy ? "Joining the queue…" : "Join the queue")
+                        </button>
+                    </div>
+                </EditForm>
+            </section>
+            break;
+
+        case Step.Done when _ticket is not null:
+            <section class="ticket-issued">
+                <span class="eyebrow">You are checked in</span>
+
+                <TicketCode Code="@_ticket.TicketCode" Hero="true" />
+
+                <p class="ticket-issued__name">@_ticket.PatientName · @_ticket.DepartmentName</p>
+
+                <div class="ticket-issued__facts">
+                    <div>
+                        <span class="stat__label">Your position</span>
+                        <span class="stat__value">@_ticket.Position</span>
+                    </div>
+                    <div>
+                        <span class="stat__label">Estimated wait</span>
+                        <span class="stat__value">
+                            <WaitTime Minutes="@_ticket.EstimatedWaitMinutes" ZeroText="Now" />
+                        </span>
+                    </div>
+                </div>
+
+                <p class="muted">
+                    Keep this number. Your folder number is
+                    <span class="data">@_ticket.MedicalRecordNumber</span>.
+                </p>
+
+                <a class="btn btn--primary btn--kiosk" href="@($"/ticket/{_ticket.TicketCode}")">
+                    Watch my place in the queue
+                </a>
+            </section>
+            break;
+    }
+</div>
+
+@code {
+    private enum Step { Department, Details, Done }
+
+    private Step _step = Step.Department;
+    private readonly CheckInRequest _form = new();
+    private IReadOnlyList<DepartmentDto>? _departments;
+    private DepartmentDto? _chosen;
+    private CheckInResponse? _ticket;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync() =>
+        _departments = await Api.GetDepartmentsAsync();
+
+    private void ChooseDepartment(DepartmentDto department)
+    {
+        _chosen = department;
+        _form.DepartmentId = department.Id;
+        _step = Step.Details;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            _ticket = await Api.CheckInAsync(_form);
+
+            // Remembered so returning to the site goes straight to their ticket.
+            await Session.RememberTicketAsync(_ticket.TicketCode);
+            _step = Step.Done;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string StepClass(Step step) =>
+        step == _step ? "is-current"
+        : step < _step ? "is-done"
+        : string.Empty;
+}

@@ -1,0 +1,15 @@
+<div class="empty">
+    <span class="empty__mark"></span>
+    <p class="empty__title">@Title</p>
+    @if (Note is not null)
+    {
+        <p class="empty__note">@Note</p>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Note { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

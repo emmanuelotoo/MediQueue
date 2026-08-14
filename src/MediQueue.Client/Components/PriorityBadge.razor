@@ -1,0 +1,24 @@
+@* Priority always carries a word, never colour alone. *@
+
+@if (Priority is not TicketPriority.Normal)
+{
+    <span class="badge @CssClass">@Label</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public TicketPriority Priority { get; set; }
+
+    private string CssClass => Priority switch
+    {
+        TicketPriority.Emergency => "badge--emergency",
+        TicketPriority.Priority => "badge--priority",
+        _ => "badge--neutral"
+    };
+
+    private string Label => Priority switch
+    {
+        TicketPriority.Emergency => "Emergency",
+        TicketPriority.Priority => "Priority",
+        _ => "Normal"
+    };
+}

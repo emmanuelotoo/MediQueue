@@ -1,0 +1,26 @@
+<span class="badge @CssClass">@Label</span>
+
+@code {
+    [Parameter, EditorRequired] public TicketStatus Status { get; set; }
+
+    private string CssClass => Status switch
+    {
+        TicketStatus.Called => "badge--accent",
+        TicketStatus.InConsultation => "badge--accent",
+        TicketStatus.Completed => "badge--settled",
+        TicketStatus.NoShow => "badge--priority",
+        TicketStatus.Cancelled => "badge--neutral",
+        _ => "badge--neutral"
+    };
+
+    private string Label => Status switch
+    {
+        TicketStatus.Waiting => "Waiting",
+        TicketStatus.Called => "Called",
+        TicketStatus.InConsultation => "In room",
+        TicketStatus.Completed => "Seen",
+        TicketStatus.NoShow => "No show",
+        TicketStatus.Cancelled => "Left",
+        _ => Status.ToString()
+    };
+}

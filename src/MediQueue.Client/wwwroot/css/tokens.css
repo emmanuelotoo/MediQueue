@@ -1,0 +1,191 @@
+/*
+  MediQueue design tokens.
+
+  The system is read at three very different distances: a phone held in the
+  hand, a kiosk at arm's length, and a display across a waiting room. Density
+  and scale change between them; colour, weight and rhythm do not.
+*/
+
+@font-face {
+  font-family: 'Archivo';
+  src: url('../fonts/archivo-variable.woff2') format('woff2-variations');
+  font-weight: 400 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/plex-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/plex-mono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('../fonts/plex-mono-600.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+
+:root {
+  /* --- Type ------------------------------------------------------------ */
+  --font-ui: 'Archivo', 'Segoe UI', sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Fluid, so one scale serves phone, kiosk and wall display. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: clamp(1.25rem, 0.4vw + 1.15rem, 1.5rem);
+  --text-xl: clamp(1.5rem, 1vw + 1.25rem, 2rem);
+  --text-2xl: clamp(2rem, 2vw + 1.5rem, 3rem);
+  --text-hero: clamp(3.5rem, 11vw, 8rem);
+
+  /* --- Space ----------------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  --radius-sm: 3px;
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  /* Touch targets sized for a kiosk used with a thumb, not a mouse. */
+  --tap: 3rem;
+  --tap-kiosk: 4.5rem;
+
+  --rule: 1px;
+  --edge: 3px; /* priority edge bar */
+
+  /* --- Colour ---------------------------------------------------------- */
+  /*
+    Warm paper rather than pure white: a lit waiting room is not a photo
+    studio, and #FFF glares. Petrol rather than blue: it reads as clinical
+    without borrowing the corporate-dashboard palette.
+  */
+  --paper: #f4f1eb;
+  --surface: #fbfaf7;
+  --surface-sunken: #eeeae2;
+  --surface-raised: #ffffff;
+
+  --ink: #14211f;
+  --ink-muted: #5a6764;
+  --ink-faint: #8b9793;
+
+  --line: #ddd7cc;
+  --line-strong: #c3bcae;
+
+  --accent: #0d6560;
+  --accent-strong: #084a46;
+  --accent-soft: #dcebe8;
+  --accent-ink: #ffffff;
+
+  --emergency: #b3352a;
+  --emergency-soft: #f7e2df;
+  --priority: #a56704;
+  --priority-soft: #f8ecd6;
+  --settled: #3f6b46;
+  --settled-soft: #e2ede2;
+
+  --focus: #0d6560;
+
+  /* Grid texture: a chart-paper hairline, barely there. */
+  --grid-line: rgba(20, 33, 31, 0.045);
+  --grid-size: 26px;
+
+  --shadow-sm: 0 1px 2px rgba(20, 33, 31, 0.06);
+  --shadow: 0 2px 4px rgba(20, 33, 31, 0.06), 0 8px 20px -12px rgba(20, 33, 31, 0.28);
+  --shadow-lg: 0 4px 8px rgba(20, 33, 31, 0.07), 0 24px 48px -20px rgba(20, 33, 31, 0.34);
+
+  --ease: cubic-bezier(0.32, 0.72, 0.28, 1);
+  --quick: 140ms;
+  --settle: 320ms;
+}
+
+/*
+  Dark is not a preference here so much as a condition: waiting-room screens
+  are often dimmed, and night shift runs with the lights down. Every token is
+  redefined, never merely inverted.
+*/
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #071618;
+    --surface: #0d2124;
+    --surface-sunken: #061214;
+    --surface-raised: #123034;
+
+    --ink: #e6efec;
+    --ink-muted: #9db0ac;
+    --ink-faint: #6c817d;
+
+    --line: #1c3d41;
+    --line-strong: #2c565b;
+
+    --accent: #3fb0a5;
+    --accent-strong: #63cbc0;
+    --accent-soft: #10322f;
+    --accent-ink: #04201d;
+
+    --emergency: #ef7266;
+    --emergency-soft: #3a1a17;
+    --priority: #e0a63f;
+    --priority-soft: #35270f;
+    --settled: #79b483;
+    --settled-soft: #16301a;
+
+    --focus: #63cbc0;
+
+    --grid-line: rgba(230, 239, 236, 0.045);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 20px -12px rgba(0, 0, 0, 0.7);
+    --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.4), 0 24px 48px -20px rgba(0, 0, 0, 0.8);
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #071618;
+  --surface: #0d2124;
+  --surface-sunken: #061214;
+  --surface-raised: #123034;
+
+  --ink: #e6efec;
+  --ink-muted: #9db0ac;
+  --ink-faint: #6c817d;
+
+  --line: #1c3d41;
+  --line-strong: #2c565b;
+
+  --accent: #3fb0a5;
+  --accent-strong: #63cbc0;
+  --accent-soft: #10322f;
+  --accent-ink: #04201d;
+
+  --emergency: #ef7266;
+  --emergency-soft: #3a1a17;
+  --priority: #e0a63f;
+  --priority-soft: #35270f;
+  --settled: #79b483;
+  --settled-soft: #16301a;
+
+  --focus: #63cbc0;
+
+  --grid-line: rgba(230, 239, 236, 0.045);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 4px rgba(0, 0, 0, 0.35), 0 8px 20px -12px rgba(0, 0, 0, 0.7);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.4), 0 24px 48px -20px rgba(0, 0, 0, 0.8);
+}

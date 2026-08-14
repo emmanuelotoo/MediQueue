@@ -1,16 +1,95 @@
-﻿@inherits LayoutComponentBase
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@inherits LayoutComponentBase
+@implements IDisposable
+@inject MediQueueAuthStateProvider Auth
+@inject NavigationManager Navigation
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
+@* The waiting-room board is a fixture on a wall: no chrome, no navigation. *@
+@if (IsFullBleed)
+{
+    @Body
+}
+else
+{
+    <div class="shell">
+        <header class="masthead">
+            <a class="masthead__mark" href="/"><span>Medi</span><span>Queue</span></a>
 
-        <article class="content px-4">
+            <nav class="masthead__nav">
+                <NavLink class="masthead__link" href="/checkin">Check in</NavLink>
+                <NavLink class="masthead__link" href="/track">My ticket</NavLink>
+
+                <AuthorizeView Roles="@($"{Roles.Receptionist},{Roles.Admin}")">
+                    <NavLink class="masthead__link" href="/reception">Reception</NavLink>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="@($"{Roles.Clinician},{Roles.Admin}")">
+                    <NavLink class="masthead__link" href="/clinic">Clinic</NavLink>
+                </AuthorizeView>
+
+                <AuthorizeView Roles="@Roles.Admin">
+                    <NavLink class="masthead__link" href="/analytics">Reports</NavLink>
+                </AuthorizeView>
+            </nav>
+
+            <AuthorizeView>
+                <Authorized>
+                    <div class="masthead__who">
+                        <div>
+                            <strong>@context.User.Identity?.Name</strong>
+                            <span class="masthead__role">@Auth.Session?.Role</span>
+                        </div>
+                        <button class="btn btn--quiet btn--small" @onclick="SignOutAsync">Sign out</button>
+                    </div>
+                </Authorized>
+                <NotAuthorized>
+                    <div class="masthead__who">
+                        <a class="btn btn--quiet btn--small" href="/login">Staff sign-in</a>
+                    </div>
+                </NotAuthorized>
+            </AuthorizeView>
+        </header>
+
+        <main class="@BodyClass">
             @Body
-        </article>
-    </main>
-</div>
+        </main>
+    </div>
+}
+
+@code {
+    private string _path = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        _path = CurrentPath();
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _path = CurrentPath();
+        StateHasChanged();
+    }
+
+    private string CurrentPath() =>
+        Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0].TrimEnd('/').ToLowerInvariant();
+
+    private bool IsFullBleed => _path.StartsWith("board");
+
+    private bool IsKiosk => _path.StartsWith("checkin") || _path.StartsWith("track") || _path.StartsWith("ticket") || _path.Length == 0;
+
+    private bool IsConsole => _path.StartsWith("reception") || _path.StartsWith("clinic");
+
+    private string BodyClass => IsKiosk
+        ? "shell__body shell__body--kiosk"
+        : IsConsole
+            ? "shell__body shell__body--wide"
+            : "shell__body";
+
+    private async Task SignOutAsync()
+    {
+        await Auth.SignOutAsync();
+        Navigation.NavigateTo("/");
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

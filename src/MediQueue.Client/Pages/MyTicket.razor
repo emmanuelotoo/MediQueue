@@ -1,0 +1,157 @@
+@page "/ticket/{Code}"
+@implements IAsyncDisposable
+@inject MediQueueApi Api
+@inject QueueHubClient Hub
+@inject SessionStore Session
+
+<PageTitle>@Code — MediQueue</PageTitle>
+
+@if (_missing)
+{
+    <EmptyState Title="We cannot find that ticket"
+                Note="Check the code on your slip, or ask at the front desk.">
+        <a class="btn btn--quiet" href="/track" style="margin-top:var(--space-4);">Try another code</a>
+    </EmptyState>
+}
+else if (_ticket is null)
+{
+    <div class="stack">
+        <div class="skeleton" style="height:5rem;"></div>
+        <div class="skeleton" style="width:60%;"></div>
+        <div class="skeleton" style="height:6rem;"></div>
+    </div>
+}
+else
+{
+    <div class="track">
+        <div class="track__head">
+            <span class="eyebrow">@_ticket.DepartmentName</span>
+            <LiveIndicator />
+        </div>
+
+        <TicketCode Code="@_ticket.TicketCode" Hero="true" />
+        <p class="muted">@_ticket.PatientName</p>
+
+        @if (_ticket.Status is TicketStatus.Called or TicketStatus.InConsultation)
+        {
+            @* The one moment this screen exists for. *@
+            <div class="called" role="status">
+                <span class="called__label">It is your turn</span>
+                <span class="called__room">Room @_ticket.RoomNumber</span>
+                <span class="called__note">Please go to the consultation room now.</span>
+            </div>
+        }
+        else if (_ticket.Status == TicketStatus.Waiting)
+        {
+            <div class="track__facts">
+                <div>
+                    <span class="stat__label">Ahead of you</span>
+                    <span class="stat__value">@_ticket.AheadOfYou</span>
+                </div>
+                <div>
+                    <span class="stat__label">Estimated wait</span>
+                    <span class="stat__value">
+                        <WaitTime Minutes="@_ticket.EstimatedWaitMinutes" ZeroText="Next" />
+                    </span>
+                </div>
+            </div>
+
+            <p class="muted">
+                @if (_ticket.AheadOfYou == 0)
+                {
+                    <text>You are next. Stay where staff can see you.</text>
+                }
+                else
+                {
+                    <text>
+                        This screen updates by itself. You do not need to refresh it or
+                        keep asking at the desk.
+                    </text>
+                }
+            </p>
+
+            <PriorityBadge Priority="_ticket.Priority" />
+        }
+        else
+        {
+            <div class="track__facts">
+                <div>
+                    <span class="stat__label">Status</span>
+                    <span style="display:block;margin-top:var(--space-2);">
+                        <StatusBadge Status="_ticket.Status" />
+                    </span>
+                </div>
+            </div>
+
+            <p class="muted">@ClosingNote</p>
+        }
+
+        <p class="faint" style="font-size:var(--text-xs);">
+            Checked in at @_ticket.CheckedInAt.ToLocalTime().ToString("HH:mm")
+        </p>
+    </div>
+}
+
+@code {
+    [Parameter] public string Code { get; set; } = string.Empty;
+
+    private TicketStatusDto? _ticket;
+    private bool _missing;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _ticket = await Api.GetTicketAsync(Code);
+        _missing = _ticket is null;
+
+        if (_ticket is null)
+        {
+            return;
+        }
+
+        await Session.RememberTicketAsync(_ticket.TicketCode);
+
+        Hub.TicketUpdated += OnTicketUpdated;
+        Hub.TicketCalled += OnTicketCalled;
+        await Hub.WatchTicketAsync(_ticket.TicketCode);
+    }
+
+    private void OnTicketUpdated(TicketStatusDto dto)
+    {
+        if (!string.Equals(dto.TicketCode, _ticket?.TicketCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ticket = dto;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTicketCalled(TicketCalledDto dto)
+    {
+        if (_ticket is null
+            || !string.Equals(dto.TicketCode, _ticket.TicketCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ticket.Status = TicketStatus.Called;
+        _ticket.RoomNumber = dto.RoomNumber;
+        _ticket.Position = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private string ClosingNote => _ticket?.Status switch
+    {
+        TicketStatus.Completed => "Your consultation is finished. Safe journey home.",
+        TicketStatus.NoShow => "You were called but not found. Please speak to the front desk.",
+        TicketStatus.Cancelled => "This ticket was cancelled.",
+        _ => string.Empty
+    };
+
+    public ValueTask DisposeAsync()
+    {
+        Hub.TicketUpdated -= OnTicketUpdated;
+        Hub.TicketCalled -= OnTicketCalled;
+        return ValueTask.CompletedTask;
+    }
+}

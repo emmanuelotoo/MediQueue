@@ -1,0 +1,83 @@
+@page "/login"
+@inject MediQueueApi Api
+@inject MediQueueAuthStateProvider Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Staff sign-in — MediQueue</PageTitle>
+
+<div class="panel" style="max-width:26rem;margin:0 auto;">
+    <div class="panel__body stack">
+        <div>
+            <span class="eyebrow">Staff only</span>
+            <h1 class="page-head__title">Sign in</h1>
+        </div>
+
+        <EditForm Model="_form" OnValidSubmit="SubmitAsync" FormName="login">
+            <DataAnnotationsValidator />
+
+            <label class="field">
+                <span class="field__label">Email</span>
+                <InputText class="input" @bind-Value="_form.Email" autocomplete="username"
+                           placeholder="name@mediqueue.gh" />
+                <ValidationMessage For="() => _form.Email" />
+            </label>
+
+            <label class="field">
+                <span class="field__label">Password</span>
+                <InputText class="input" type="password" @bind-Value="_form.Password"
+                           autocomplete="current-password" />
+                <ValidationMessage For="() => _form.Password" />
+            </label>
+
+            @if (_error is not null)
+            {
+                <div class="alert alert--emergency" role="alert">@_error</div>
+            }
+
+            <button class="btn btn--primary" style="width:100%;margin-top:var(--space-4);"
+                    type="submit" disabled="@_busy">
+                @(_busy ? "Signing in…" : "Sign in")
+            </button>
+        </EditForm>
+
+        <p class="faint" style="font-size:var(--text-xs);">
+            Patients do not need an account — <a href="/checkin">check in here</a>.
+        </p>
+    </div>
+</div>
+
+@code {
+    private readonly LoginRequest _form = new();
+    private string? _error;
+    private bool _busy;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+
+        try
+        {
+            var session = await Api.LoginAsync(_form);
+            await Auth.SignInAsync(session);
+
+            Navigation.NavigateTo(LandingFor(session.Role));
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>Each role starts on the screen it actually works from.</summary>
+    private static string LandingFor(string role) => role switch
+    {
+        Roles.Clinician => "/clinic",
+        Roles.Admin => "/analytics",
+        _ => "/reception"
+    };
+}

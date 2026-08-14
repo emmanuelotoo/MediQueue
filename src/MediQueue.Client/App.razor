@@ -1,6 +1,42 @@
-﻿<Router AppAssembly="@typeof(App).Assembly" NotFoundPage="typeof(Pages.NotFound)">
-    <Found Context="routeData">
-        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)"/>
-        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
-    </Found>
-</Router>
+@using Microsoft.AspNetCore.Components.Authorization
+
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(App).Assembly">
+        <Found Context="routeData">
+            @* The layout is applied by AuthorizeRouteView, so these fragments are bare. *@
+            <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <div class="panel" style="max-width:32rem;margin:2rem auto;">
+                        <div class="panel__body stack">
+                            <span class="eyebrow">Restricted</span>
+                            <h1 class="page-head__title">Staff sign-in required</h1>
+                            <p class="muted">
+                                This screen shows patient details, so it is only available to
+                                hospital staff.
+                            </p>
+                            <a class="btn btn--primary" href="/login">Sign in</a>
+                        </div>
+                    </div>
+                </NotAuthorized>
+                <Authorizing>
+                    <div class="stack" style="max-width:24rem;margin:2rem auto;">
+                        <div class="skeleton" style="height:2rem;"></div>
+                        <div class="skeleton"></div>
+                        <div class="skeleton" style="width:60%;"></div>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <PageTitle>Not found — MediQueue</PageTitle>
+            <LayoutView Layout="@typeof(MainLayout)">
+                <div class="empty" style="margin-top:3rem;">
+                    <span class="empty__mark"></span>
+                    <p class="empty__title">That page does not exist</p>
+                    <p class="empty__note"><a href="/">Return to the start</a></p>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
