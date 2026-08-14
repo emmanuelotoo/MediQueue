@@ -5,16 +5,32 @@
         <Found Context="routeData">
             @* The layout is applied by AuthorizeRouteView, so these fragments are bare. *@
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
-                <NotAuthorized>
+                @* Being signed in as the wrong role is a different problem from
+                   not being signed in, and telling someone to sign in when they
+                   already are is the more confusing of the two. *@
+                <NotAuthorized Context="authState">
                     <div class="panel" style="max-width:32rem;margin:2rem auto;">
                         <div class="panel__body stack">
-                            <span class="eyebrow">Restricted</span>
-                            <h1 class="page-head__title">Staff sign-in required</h1>
-                            <p class="muted">
-                                This screen shows patient details, so it is only available to
-                                hospital staff.
-                            </p>
-                            <a class="btn btn--primary" href="/login">Sign in</a>
+                            @if (authState.User.Identity?.IsAuthenticated == true)
+                            {
+                                <span class="eyebrow">Restricted</span>
+                                <h1 class="page-head__title">Not available to your role</h1>
+                                <p class="muted">
+                                    You are signed in as @authState.User.Identity.Name, whose role does
+                                    not cover this screen. Speak to an administrator if you need it.
+                                </p>
+                                <a class="btn btn--quiet" href="/">Back to the start</a>
+                            }
+                            else
+                            {
+                                <span class="eyebrow">Restricted</span>
+                                <h1 class="page-head__title">Staff sign-in required</h1>
+                                <p class="muted">
+                                    This screen shows patient details, so it is only available to
+                                    hospital staff.
+                                </p>
+                                <a class="btn btn--primary" href="/login">Sign in</a>
+                            }
                         </div>
                     </div>
                 </NotAuthorized>

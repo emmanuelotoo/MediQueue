@@ -67,13 +67,7 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(Policies.ManageQueue, policy =>
-        policy.RequireRole(Roles.Receptionist, Roles.Admin))
-    .AddPolicy(Policies.TreatPatients, policy =>
-        policy.RequireRole(Roles.Receptionist, Roles.Clinician, Roles.Admin))
-    .AddPolicy(Policies.ViewAnalytics, policy =>
-        policy.RequireRole(Roles.Admin));
+builder.Services.AddAuthorization(Policies.Configure);
 
 builder.Services
     .AddControllers()

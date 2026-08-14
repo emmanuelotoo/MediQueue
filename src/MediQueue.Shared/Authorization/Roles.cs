@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authorization;
+
 namespace MediQueue.Shared.Authorization;
 
 /// <summary>
@@ -28,4 +30,22 @@ public static class Policies
 
     /// <summary>Can read reporting.</summary>
     public const string ViewAnalytics = nameof(ViewAnalytics);
+
+    /// <summary>
+    /// Defines what each policy means, once. The API enforces these and the
+    /// Blazor client uses them to decide what to show; if only one side defined
+    /// them, the client would either throw on an unknown policy or drift into
+    /// offering actions the server refuses.
+    /// </summary>
+    public static void Configure(AuthorizationOptions options)
+    {
+        options.AddPolicy(ManageQueue, policy =>
+            policy.RequireRole(Roles.Receptionist, Roles.Admin));
+
+        options.AddPolicy(TreatPatients, policy =>
+            policy.RequireRole(Roles.Receptionist, Roles.Clinician, Roles.Admin));
+
+        options.AddPolicy(ViewAnalytics, policy =>
+            policy.RequireRole(Roles.Admin));
+    }
 }
