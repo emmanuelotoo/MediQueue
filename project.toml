@@ -1,0 +1,9 @@
+# Heroku's .NET buildpack publishes what this names. The API alone keeps the
+# test projects out of the slug and builds the Blazor client once, as a
+# reference. Publishing the whole solution races on the client's static-asset
+# cache and fails intermittently.
+[_]
+schema-version = "0.2"
+
+[com.heroku.buildpacks.dotnet]
+solution_file = "src/MediQueue.Api/MediQueue.Api.csproj"
