@@ -105,7 +105,7 @@ public class CheckInEndpointTests : IClassFixture<MediQueueApiFactory>
     [InlineData("Ama Boateng", "+1 555 0100")]
     public async Task Incomplete_details_are_rejected(string name, string phone)
     {
-        var department = await _factory.AddDepartmentAsync(code: $"R{Random.Shared.Next(10, 99)}");
+        var department = await _factory.AddDepartmentAsync(code: MediQueueApiFactory.UniqueDepartmentCode());
         var client = _factory.CreateClient();
 
         var response = await client.PostJsonAsync("/api/checkin", new CheckInRequest

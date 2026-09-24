@@ -22,6 +22,16 @@ public class MediQueueApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
 {
     public const string Password = "TestPass#2026";
 
+    private static int _departmentSequence;
+
+    /// <summary>
+    /// A department code no other test in the run has used. Codes carry a
+    /// unique index, and the random two-digit codes used before collided often
+    /// enough to fail roughly one CI run in ten.
+    /// </summary>
+    public static string UniqueDepartmentCode() =>
+        $"T{Interlocked.Increment(ref _departmentSequence):D4}";
+
     /// <summary>
     /// Held open for the lifetime of the factory: an in-memory SQLite database
     /// is discarded the moment its last connection closes.

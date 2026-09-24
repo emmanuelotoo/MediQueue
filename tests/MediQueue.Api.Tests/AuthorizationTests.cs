@@ -55,7 +55,7 @@ public class AuthorizationTests : IClassFixture<MediQueueApiFactory>
     [InlineData(Roles.Admin)]
     public async Task Every_staff_role_can_read_a_department_queue(string role)
     {
-        var department = await _factory.AddDepartmentAsync(code: $"Q{Random.Shared.Next(10, 99)}");
+        var department = await _factory.AddDepartmentAsync(code: MediQueueApiFactory.UniqueDepartmentCode());
         var client = await _factory.CreateClientAsAsync(role);
 
         var response = await client.GetAsync($"/api/queue/{department.Id}");

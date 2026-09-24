@@ -54,7 +54,9 @@ public class AnalyticsTests : IClassFixture<MediQueueApiFactory>
 
         var admin = await _factory.CreateClientAsAsync(Roles.Admin);
         var summary = await admin.GetJsonAsync<AnalyticsSummaryDto>(
-            $"/api/analytics/summary?from={today:yyyy-MM-dd}&to={today:yyyy-MM-dd}");
+            // From yesterday: tickets are stamped hours ago, which is yesterday
+            // for a run shortly after midnight UTC.
+            $"/api/analytics/summary?from={today.AddDays(-1):yyyy-MM-dd}&to={today:yyyy-MM-dd}");
 
         var ward = summary!.Departments.Single(d => d.DepartmentName == "Analytics Ward");
 
@@ -78,7 +80,9 @@ public class AnalyticsTests : IClassFixture<MediQueueApiFactory>
 
         var admin = await _factory.CreateClientAsAsync(Roles.Admin);
         var summary = await admin.GetJsonAsync<AnalyticsSummaryDto>(
-            $"/api/analytics/summary?from={today:yyyy-MM-dd}&to={today:yyyy-MM-dd}");
+            // From yesterday: tickets are stamped hours ago, which is yesterday
+            // for a run shortly after midnight UTC.
+            $"/api/analytics/summary?from={today.AddDays(-1):yyyy-MM-dd}&to={today:yyyy-MM-dd}");
 
         var ward = summary!.Departments.Single(d => d.DepartmentName == "No Show Ward");
 
