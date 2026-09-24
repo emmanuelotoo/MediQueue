@@ -4,7 +4,12 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
+    <!--
+      No OverrideHtmlAssetPlaceholders: it fills index.html's placeholders only
+      when this project is published on its own. Published as the API's
+      reference, the raw placeholders shipped and the page loaded no script.
+      The API's MapStaticAssets serves the stable _framework paths instead.
+    -->
   </PropertyGroup>
 
   <ItemGroup>

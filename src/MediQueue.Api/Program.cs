@@ -128,11 +128,16 @@ else
 
 app.UseHttpsRedirection();
 
-app.UseBlazorFrameworkFiles();
-app.UseStaticFiles();
-
 app.UseAuthentication();
 app.UseAuthorization();
+
+// The Blazor client's files, served from the manifest the build produces:
+// stable paths such as _framework/blazor.webassembly.js resolve to their
+// fingerprinted files, revalidated on each load, while fingerprinted paths are
+// cached for good. A deploy therefore reaches browsers straight away. Plain
+// static files could not serve the stable paths, because only fingerprinted
+// names exist on disk.
+app.MapStaticAssets();
 
 app.MapControllers();
 app.MapHub<QueueHub>("/hubs/queue");

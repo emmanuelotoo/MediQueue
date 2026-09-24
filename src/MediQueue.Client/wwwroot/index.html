@@ -9,13 +9,11 @@
     <meta name="theme-color" content="#0d6560" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#071618" media="(prefers-color-scheme: dark)" />
     <base href="/" />
-    <link rel="preload" id="webassembly" />
     <link rel="preload" href="fonts/archivo-variable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="fonts/plex-mono-600.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="MediQueue.Client.styles.css" rel="stylesheet" />
-    <script type="importmap"></script>
 </head>
 
 <body>
@@ -79,7 +77,8 @@
         }
     </style>
 
-    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <!-- The stable address; the server maps it to the fingerprinted file. -->
+    <script src="_framework/blazor.webassembly.js"></script>
 </body>
 
 </html>
