@@ -1,13 +1,16 @@
 name: CI
 
 on:
+  # Every branch, so a change is proven before it reaches main, where Heroku
+  # deploys only after these checks pass.
   push:
-    branches: [main]
+    branches: ['**']
   pull_request:
     branches: [main]
 
 jobs:
   build:
+    name: Build and test (SQLite)
     runs-on: ubuntu-latest
 
     steps:
@@ -25,4 +28,50 @@ jobs:
         run: dotnet build MediQueue.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test MediQueue.slnx --configuration Release --no-build --verbosity normal
+        run: dotnet test MediQueue.slnx --configuration Release --no-build --logger GitHubActions
+
+      # GITHUB_PATH takes effect from the next step, hence two steps.
+      - name: Install EF tools
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.0.12
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      # A model change without a matching migration would fail on deploy, not here.
+      - name: Check migrations match the model
+        run: |
+          dotnet ef migrations has-pending-model-changes --project src/MediQueue.Infrastructure --context SqliteMediQueueDbContext --configuration Release --no-build
+          dotnet ef migrations has-pending-model-changes --project src/MediQueue.Infrastructure --context PostgresMediQueueDbContext --configuration Release --no-build
+
+  postgres:
+    name: API tests (Postgres)
+    runs-on: ubuntu-latest
+
+    # Production runs on Postgres, and no developer machine is required to have
+    # it, so this job is where the Postgres migration and queries are proven.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: mediqueue
+          POSTGRES_PASSWORD: mediqueue
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mediqueue"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      MEDIQUEUE_TEST_POSTGRES: Host=localhost;Port=5432;Username=mediqueue;Password=mediqueue
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test the API against Postgres
+        run: dotnet test tests/MediQueue.Api.Tests --configuration Release --logger GitHubActions
