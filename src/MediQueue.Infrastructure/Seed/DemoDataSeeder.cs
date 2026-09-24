@@ -31,7 +31,13 @@ public static class DemoDataSeeder
         await db.Database.MigrateAsync(cancellationToken);
     }
 
-    public static async Task SeedAsync(IServiceProvider services, CancellationToken cancellationToken = default)
+    /// <param name="staffPassword">
+    /// Already validated by <see cref="DemoSeedPassword"/>; every seeded staff account gets it.
+    /// </param>
+    public static async Task SeedAsync(
+        IServiceProvider services,
+        string staffPassword,
+        CancellationToken cancellationToken = default)
     {
         using var scope = services.CreateScope();
         var sp = scope.ServiceProvider;
@@ -53,7 +59,7 @@ public static class DemoDataSeeder
 
         await SeedRolesAsync(roles);
         var departments = await SeedDepartmentsAsync(db, cancellationToken);
-        var staff = await SeedStaffAsync(users, departments, logger);
+        var staff = await SeedStaffAsync(users, departments, staffPassword);
         var patients = await SeedPatientsAsync(db, clock, cancellationToken);
 
         await SeedVisitsAsync(db, clock, departments, staff, patients, cancellationToken);
@@ -89,7 +95,7 @@ public static class DemoDataSeeder
     private static async Task<List<ApplicationUser>> SeedStaffAsync(
         UserManager<ApplicationUser> users,
         List<Department> departments,
-        ILogger logger)
+        string staffPassword)
     {
         var created = new List<ApplicationUser>();
 
@@ -106,14 +112,14 @@ public static class DemoDataSeeder
                     : departments.First(d => d.Code == seed.DepartmentCode).Id
             };
 
-            var result = await users.CreateAsync(user, DemoData.StaffPassword);
+            var result = await users.CreateAsync(user, staffPassword);
+
+            // A demo hospital missing some of its staff is broken, not partial:
+            // stop rather than log and carry on.
             if (!result.Succeeded)
             {
-                logger.LogWarning(
-                    "Could not create {Email}: {Errors}",
-                    seed.Email,
-                    string.Join("; ", result.Errors.Select(e => e.Description)));
-                continue;
+                throw new InvalidOperationException(
+                    $"Could not create {seed.Email}: {string.Join("; ", result.Errors.Select(e => e.Description))}");
             }
 
             await users.AddToRoleAsync(user, seed.Role);

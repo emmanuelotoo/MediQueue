@@ -3,7 +3,6 @@ using MediQueue.Api;
 using MediQueue.Api.Hubs;
 using MediQueue.Api.Services;
 using MediQueue.Infrastructure;
-using MediQueue.Infrastructure.Seed;
 using MediQueue.Shared.Authorization;
 using MediQueue.Shared.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -108,14 +107,7 @@ app.MapHub<QueueHub>("/hubs/queue");
 // Any route the API does not own belongs to the Blazor client's router.
 app.MapFallbackToFile("index.html");
 
-// Schema always; demo patients only where they belong. A real deployment gets
-// the tables and nothing else, so no fictional people can reach a live report.
-await DemoDataSeeder.MigrateAsync(app.Services);
-
-if (app.Configuration.GetValue("Seed:DemoData", app.Environment.IsDevelopment()))
-{
-    await DemoDataSeeder.SeedAsync(app.Services);
-}
+await DatabaseStartup.RunAsync(app);
 
 app.Run();
 
