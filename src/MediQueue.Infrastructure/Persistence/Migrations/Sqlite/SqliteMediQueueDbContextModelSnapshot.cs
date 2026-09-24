@@ -7,10 +7,10 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace MediQueue.Infrastructure.Persistence.Migrations
+namespace MediQueue.Infrastructure.Persistence.Migrations.Sqlite
 {
-    [DbContext(typeof(MediQueueDbContext))]
-    partial class MediQueueDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(SqliteMediQueueDbContext))]
+    partial class SqliteMediQueueDbContextModelSnapshot : ModelSnapshot
     {
         protected override void BuildModel(ModelBuilder modelBuilder)
         {

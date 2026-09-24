@@ -8,9 +8,9 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace MediQueue.Infrastructure.Persistence.Migrations
+namespace MediQueue.Infrastructure.Persistence.Migrations.Sqlite
 {
-    [DbContext(typeof(MediQueueDbContext))]
+    [DbContext(typeof(SqliteMediQueueDbContext))]
     [Migration("20260814224156_InitialSchema")]
     partial class InitialSchema
     {

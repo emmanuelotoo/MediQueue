@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace MediQueue.Infrastructure.Persistence.Migrations
+namespace MediQueue.Infrastructure.Persistence.Migrations.Sqlite
 {
     /// <inheritdoc />
     public partial class InitialSchema : Migration

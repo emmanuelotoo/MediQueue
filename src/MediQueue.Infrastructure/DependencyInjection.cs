@@ -12,29 +12,15 @@ namespace MediQueue.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// Registers persistence and identity. The database provider is chosen by
-    /// <c>Database:Provider</c>: SQLite by default so a fresh clone runs with no
-    /// setup, SQL Server in deployment.
+    /// Registers persistence and identity. <c>Database:Provider</c> chooses
+    /// the database: <c>Sqlite</c> by default, so a fresh clone runs with no
+    /// setup, or <c>Postgres</c> in deployment.
     /// </summary>
     public static IServiceCollection AddMediQueueInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var provider = configuration["Database:Provider"] ?? "Sqlite";
-        var connectionString = configuration.GetConnectionString("Default")
-            ?? "Data Source=mediqueue.db";
-
-        services.AddDbContext<MediQueueDbContext>(options =>
-        {
-            if (string.Equals(provider, "SqlServer", StringComparison.OrdinalIgnoreCase))
-            {
-                options.UseSqlServer(connectionString);
-            }
-            else
-            {
-                options.UseSqlite(connectionString);
-            }
-        });
+        AddDatabase(services, configuration);
 
         services.AddIdentityCore<ApplicationUser>(options =>
             {
@@ -60,5 +46,45 @@ public static class DependencyInjection
         services.AddScoped<QueueEngine>();
 
         return services;
+    }
+
+    /// <summary>
+    /// Registers the context for the configured provider. Each provider has
+    /// its own subclass because each owns its own migrations; everything else
+    /// asks for <see cref="MediQueueDbContext"/> and never knows which it got.
+    /// </summary>
+    private static void AddDatabase(IServiceCollection services, IConfiguration configuration)
+    {
+        var provider = configuration["Database:Provider"] ?? "Sqlite";
+
+        if (string.Equals(provider, "Sqlite", StringComparison.OrdinalIgnoreCase))
+        {
+            var connectionString = configuration.GetConnectionString("Default")
+                ?? "Data Source=mediqueue.db";
+
+            services.AddDbContext<MediQueueDbContext, SqliteMediQueueDbContext>(
+                options => options.UseSqlite(connectionString));
+            return;
+        }
+
+        if (string.Equals(provider, "Postgres", StringComparison.OrdinalIgnoreCase))
+        {
+            // Heroku supplies DATABASE_URL; anywhere else, a normal connection string.
+            var databaseUrl = configuration["DATABASE_URL"];
+            var connectionString = !string.IsNullOrWhiteSpace(databaseUrl)
+                ? PostgresConnectionString.FromUrl(databaseUrl)
+                : configuration.GetConnectionString("Default")
+                  ?? throw new InvalidOperationException(
+                      "Database:Provider is Postgres, but neither DATABASE_URL nor ConnectionStrings:Default is set.");
+
+            services.AddDbContext<MediQueueDbContext, PostgresMediQueueDbContext>(
+                options => options.UseNpgsql(connectionString));
+            return;
+        }
+
+        // An unknown value used to fall back to SQLite silently. On Heroku that
+        // would mean a database on a disk that is wiped at least once a day.
+        throw new InvalidOperationException(
+            $"Unknown Database:Provider '{provider}'. Use 'Sqlite' or 'Postgres'.");
     }
 }

@@ -7,9 +7,14 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace MediQueue.Infrastructure.Persistence;
 
-public class MediQueueDbContext : IdentityDbContext<ApplicationUser>
+/// <summary>
+/// The model, shared by every provider. Abstract because each provider has a
+/// subclass that owns that provider's migrations; resolving this type from DI
+/// yields whichever one configuration selected.
+/// </summary>
+public abstract class MediQueueDbContext : IdentityDbContext<ApplicationUser>
 {
-    public MediQueueDbContext(DbContextOptions<MediQueueDbContext> options) : base(options)
+    protected MediQueueDbContext(DbContextOptions options) : base(options)
     {
     }
 
@@ -34,8 +39,8 @@ public class MediQueueDbContext : IdentityDbContext<ApplicationUser>
     /// comparison against one — which every "today's queue" query needs. Storing
     /// a fixed-width UTC string keeps lexicographic order identical to
     /// chronological order, so <c>&gt;=</c> and <c>ORDER BY</c> both work in the
-    /// database rather than being pulled into memory. SQL Server keeps its
-    /// native <c>datetimeoffset</c> and never sees this.
+    /// database rather than being pulled into memory. Postgres stores
+    /// <c>timestamp with time zone</c> natively and never sees this.
     /// </summary>
     private static void ApplySqliteTimestampConversion(ModelBuilder builder)
     {

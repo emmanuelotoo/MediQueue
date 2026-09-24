@@ -1,28 +1,50 @@
-﻿using MediQueue.Domain.Entities;
+using MediQueue.Domain.Entities;
 using MediQueue.Infrastructure.Identity;
 using MediQueue.Infrastructure.Persistence;
-using MediQueue.Shared.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace MediQueue.Api.Tests;
 
 /// <summary>
-/// Hosts the real pipeline â€” real routing, real authorization, real SignalR â€”
-/// against an in-memory SQLite database. Only the storage is swapped, so the
-/// tests exercise the same code that runs in production.
+/// Hosts the real pipeline — routing, authorization, SignalR — against a
+/// throwaway database. The provider is chosen through configuration exactly as
+/// in production, so the suite exercises the real provider switch: in-memory
+/// SQLite by default, or Postgres when <see cref="PostgresVariable"/> is set,
+/// as it is in CI.
 /// </summary>
 public class MediQueueApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string Password = "TestPass#2026";
 
+    /// <summary>
+    /// A Postgres server connection string without a database name. Each
+    /// factory creates, and afterwards drops, its own database on that server.
+    /// </summary>
+    public const string PostgresVariable = "MEDIQUEUE_TEST_POSTGRES";
+
     private static int _departmentSequence;
+
+    private readonly string _databaseName = $"mediqueue_test_{Guid.NewGuid():N}";
+
+    /// <summary>
+    /// A shared in-memory SQLite database lives only while a connection to it
+    /// is open, so the factory holds one for its whole lifetime.
+    /// </summary>
+    private SqliteConnection? _keepAlive;
+
+    private static string? PostgresServer => Environment.GetEnvironmentVariable(PostgresVariable);
+
+    public bool UsesPostgres => !string.IsNullOrWhiteSpace(PostgresServer);
+
+    private string ConnectionString => UsesPostgres
+        ? $"{PostgresServer};Database={_databaseName}"
+        : $"Data Source={_databaseName};Mode=Memory;Cache=Shared";
 
     /// <summary>
     /// A department code no other test in the run has used. Codes carry a
@@ -32,15 +54,15 @@ public class MediQueueApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
     public static string UniqueDepartmentCode() =>
         $"T{Interlocked.Increment(ref _departmentSequence):D4}";
 
-    /// <summary>
-    /// Held open for the lifetime of the factory: an in-memory SQLite database
-    /// is discarded the moment its last connection closes.
-    /// </summary>
-    private SqliteConnection _connection = null!;
-
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+
+        builder.UseSetting("Database:Provider", UsesPostgres ? "Postgres" : "Sqlite");
+        builder.UseSetting("ConnectionStrings:Default", ConnectionString);
+
+        // Blanked so a DATABASE_URL on the machine can never redirect the suite.
+        builder.UseSetting("DATABASE_URL", string.Empty);
 
         builder.UseSetting("Seed:DemoData", "false");
         builder.UseSetting("Jwt:Key", "test-signing-key-that-is-long-enough-for-hmac-sha256");
@@ -51,21 +73,18 @@ public class MediQueueApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
             logging.AddSimpleConsole(o => o.SingleLine = false);
             logging.SetMinimumLevel(LogLevel.Warning);
         });
-
-        builder.ConfigureServices(services =>
-        {
-            services.RemoveAll<DbContextOptions<MediQueueDbContext>>();
-            services.RemoveAll<MediQueueDbContext>();
-
-            services.AddDbContext<MediQueueDbContext>(options => options.UseSqlite(_connection));
-        });
     }
 
     public async Task InitializeAsync()
     {
-        _connection = new SqliteConnection("DataSource=:memory:");
-        await _connection.OpenAsync();
+        if (!UsesPostgres)
+        {
+            _keepAlive = new SqliteConnection(ConnectionString);
+            await _keepAlive.OpenAsync();
+        }
 
+        // Starting the host runs the app's own startup migration; this makes
+        // the dependency explicit rather than relying on it.
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<MediQueueDbContext>();
         await db.Database.MigrateAsync();
@@ -73,7 +92,17 @@ public class MediQueueApiFactory : WebApplicationFactory<Program>, IAsyncLifetim
 
     public new async Task DisposeAsync()
     {
-        await _connection.DisposeAsync();
+        if (UsesPostgres)
+        {
+            using var scope = Services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<MediQueueDbContext>().Database.EnsureDeletedAsync();
+        }
+
+        if (_keepAlive is not null)
+        {
+            await _keepAlive.DisposeAsync();
+        }
+
         await base.DisposeAsync();
     }
 
