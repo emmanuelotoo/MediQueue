@@ -6,6 +6,7 @@ using MediQueue.Infrastructure;
 using MediQueue.Shared.Authorization;
 using MediQueue.Shared.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 
 // Heroku's release phase runs the app with this switch: migrate, seed, exit.
@@ -84,7 +85,34 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ProblemDetailsExceptionHandler>();
 builder.Services.AddOpenApi();
 
+// Heroku terminates TLS at its router and forwards plain HTTP. Trusting its
+// X-Forwarded-* headers is how the app learns a request arrived over HTTPS, so
+// HSTS is sent and http:// is redirected. Off unless configured, because a
+// client talking to the app directly could otherwise claim anything.
+var behindProxy = builder.Configuration.GetValue<bool>("Hosting:TrustForwardedHeaders");
+
+if (behindProxy)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+        // The router has no fixed address to allow-list. The default forward
+        // limit of one still takes only the entry the router appended.
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+
+    builder.Services.AddHttpsRedirection(options => options.HttpsPort = 443);
+}
+
 var app = builder.Build();
+
+// First, so everything after it sees the scheme the browser actually used.
+if (behindProxy)
+{
+    app.UseForwardedHeaders();
+}
 
 app.UseExceptionHandler();
 
