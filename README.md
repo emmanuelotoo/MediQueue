@@ -6,7 +6,7 @@ Patients check in from a kiosk or their own phone, watch their position advance 
 
 ## Stack
 
-Blazor WebAssembly · ASP.NET Core Web API · SignalR · Entity Framework Core · SQL Server (SQLite in development) · .NET 10
+Blazor WebAssembly · ASP.NET Core Web API · SignalR · Entity Framework Core · PostgreSQL (SQLite in development) · .NET 10
 
 ## Running it
 
@@ -22,7 +22,7 @@ To start over with fresh data, delete `src/MediQueue.Api/mediqueue.db` and run a
 
 ### Signing in
 
-Every seeded account uses the password `MediQueue#2026`. Development only — the seeder never runs outside Development unless `Seed:DemoData` is explicitly set.
+Locally, every seeded account uses the password `MediQueue#2026`. It is published here, so a deployed site refuses it: deployments must set their own through `Seed:StaffPassword`.
 
 | Role | Example account | Lands on |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ dotnet test MediQueue.slnx
 | Suite | Covers |
 | --- | --- |
 | `MediQueue.Domain.Tests` | Queue rules: ordering, ticket numbering, wait estimates, legal transitions, room exclusivity |
-| `MediQueue.Api.Tests` | Endpoints, authorization, the full consultation flow, analytics — against in-memory SQLite |
+| `MediQueue.Api.Tests` | Endpoints, authorization, the full consultation flow, analytics, deployment settings. In-memory SQLite by default; set `MEDIQUEUE_TEST_POSTGRES` to a Postgres server connection string to run the same suite on Postgres, as CI does. |
 | `MediQueue.Client.Tests` | Blazor components, via bUnit |
 
 ## Layout
@@ -75,20 +75,78 @@ The design specification is in [`docs/superpowers/specs`](docs/superpowers/specs
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| `Database:Provider` | `Sqlite` | `SqlServer` for deployment |
-| `ConnectionStrings:Default` | `Data Source=mediqueue.db` | |
+| `Database:Provider` | `Sqlite` | `Postgres` in deployment. Any other value stops startup. |
+| `ConnectionStrings:Default` | `Data Source=mediqueue.db` | Used unless `DATABASE_URL` is set |
+| `DATABASE_URL` | — | Set by Heroku Postgres; takes precedence when the provider is Postgres |
 | `Jwt:Key` | generated per run in Development | **Required** outside Development; startup fails without it |
-| `Seed:DemoData` | `true` in Development only | Demo patients must never reach a real deployment |
+| `Seed:DemoData` | `true` in Development only | Seeds the demo hospital on an empty database |
+| `Seed:StaffPassword` | README password in Development only | **Required** when seeding outside Development. Must meet the password policy and must not be the README password. |
+| `Hosting:TrustForwardedHeaders` | `false` | `true` behind Heroku's router, so HTTPS is recognised |
 
-## Deploying
+Environment variables use double underscores: `Seed__StaffPassword`.
+
+## Deploying to Heroku
+
+The app runs on one Basic dyno ($7/month) with Heroku Postgres Essential-0 ($5/month). The [GitHub Student Developer Pack](https://www.heroku.com/github-students/) gives $13/month of Heroku credit for 24 months, which covers both. Heroku requires a card on file even when credit covers the bill.
+
+Everything below is done in the Heroku dashboard; no CLI is needed.
+
+**1. Create the app.** [dashboard.heroku.com](https://dashboard.heroku.com) → **New** → **Create new app**. Choose a name and the **Europe** region, which is closer to Ghana than the United States.
+
+**2. Add the database.** **Resources** → **Add-ons** → search *Heroku Postgres* → plan **Essential 0** → **Submit Order Form**. This sets `DATABASE_URL`.
+
+**3. Set the config vars.** **Settings** → **Reveal Config Vars**, then add:
+
+| Key | Value |
+| --- | --- |
+| `Database__Provider` | `Postgres` |
+| `Jwt__Key` | a random value you generate (below) |
+| `Seed__DemoData` | `true` |
+| `Seed__StaffPassword` | a password you choose: 10+ characters, an uppercase letter, a digit and a symbol, and not the README password |
+| `Hosting__TrustForwardedHeaders` | `true` |
+
+Generate `Jwt__Key` on your own machine, so it never passes through chat or the repository:
+
+```powershell
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+```
+
+```bash
+openssl rand -base64 48
+```
+
+Share `Seed__StaffPassword` with the team privately. Every seeded staff account on the live site uses it.
+
+**4. Connect GitHub.** **Deploy** → **Deployment method: GitHub** → connect → find `MediQueue` → **Connect**. Under **Automatic deploys**, choose `main`, tick **Wait for CI to pass before deploy**, then **Enable Automatic Deploys**.
+
+**5. First deploy.** Under **Manual deploy**, choose `main` → **Deploy Branch**. The build log should show `dotnet publish` of `src/MediQueue.Api/MediQueue.Api.csproj`. The release log should end with `Seeded 6 departments, 11 staff, 180 patients.`
+
+**6. Use a Basic dyno.** **Resources** → **Change Dyno Type** → **Basic**. Eco dynos sleep after 30 minutes idle, and the first visitor afterwards waits while it wakes. That's bad in a demo.
+
+**7. Open the app.** Click **Open app**.
+
+After that, every push to `main` deploys once CI passes. Migrations run in the release phase, before the new version takes traffic. A failed migration cancels the deploy and leaves the running version alone.
+
+### When something goes wrong
+
+**Activity** → the failed build or release → **View log**.
+
+| Symptom | Cause |
+| --- | --- |
+| Release fails naming `Seed__StaffPassword` | The var is missing, too weak, or the README password |
+| App crashes with `Jwt:Key is not configured` | `Jwt__Key` is missing |
+| Startup fails with `Unknown Database:Provider` | `Database__Provider` is misspelt; it must be `Postgres` |
+| Build log publishes `MediQueue.slnx` instead of the API project | `project.toml` was not picked up. Add config var `SOLUTION_FILE` = `src/MediQueue.Api/MediQueue.Api.csproj` |
+
+## Running with Docker
 
 ```bash
 docker compose up --build
 ```
 
-Needs a `.env` file with `MSSQL_SA_PASSWORD` and `JWT_KEY`; Compose refuses to start without them. The API runs unprivileged and applies migrations on startup.
+Needs a `.env` file with `POSTGRES_PASSWORD`, `JWT_KEY` and `SEED_STAFF_PASSWORD`; Compose refuses to start without them. The stack mirrors Heroku: Postgres and the seeded demo hospital, served on port 8080.
 
-CI runs restore, build, and the full test suite on every push and pull request.
+CI builds and tests on every push, once on SQLite and once against a real Postgres, and fails if a model change has no matching migration.
 
 ## Team
 

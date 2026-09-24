@@ -17,7 +17,7 @@ public interface IAnalyticsService
 /// <summary>
 /// Reporting over the visit record. Aggregation runs in memory over a bounded
 /// date window rather than in SQL, so the same numbers come out on SQLite and
-/// SQL Server; a fortnight of outpatient traffic is a few thousand rows.
+/// Postgres; a fortnight of outpatient traffic is a few thousand rows.
 /// </summary>
 public class AnalyticsService : IAnalyticsService
 {
