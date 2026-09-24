@@ -8,7 +8,12 @@ using MediQueue.Shared.Serialization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
-var builder = WebApplication.CreateBuilder(args);
+// Heroku's release phase runs the app with this switch: migrate, seed, exit.
+// Removed before configuration parses the arguments, so it is never read as a setting.
+const string MigrateOnlySwitch = "--migrate-only";
+var migrateOnly = args.Contains(MigrateOnlySwitch);
+
+var builder = WebApplication.CreateBuilder(args.Where(arg => arg != MigrateOnlySwitch).ToArray());
 
 builder.Services.AddMediQueueInfrastructure(builder.Configuration);
 
@@ -108,6 +113,11 @@ app.MapHub<QueueHub>("/hubs/queue");
 app.MapFallbackToFile("index.html");
 
 await DatabaseStartup.RunAsync(app);
+
+if (migrateOnly)
+{
+    return;
+}
 
 app.Run();
 
