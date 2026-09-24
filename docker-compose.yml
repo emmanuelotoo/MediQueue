@@ -1,21 +1,18 @@
 services:
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:17
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in a .env file}
-      MSSQL_PID: Developer
-    ports:
-      - "1433:1433"
+      POSTGRES_USER: mediqueue
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in a .env file}
+      POSTGRES_DB: mediqueue
     volumes:
-      - mssql-data:/var/opt/mssql
+      - pg-data:/var/lib/postgresql/data
     healthcheck:
       # The API migrates on startup, so it must not race the server's boot.
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1'"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U mediqueue -d mediqueue"]
+      interval: 5s
       timeout: 5s
       retries: 12
-      start_period: 30s
 
   api:
     build: .
@@ -23,17 +20,16 @@ services:
       db:
         condition: service_healthy
     environment:
-      Database__Provider: SqlServer
-      ConnectionStrings__Default: >-
-        Server=db,1433;Database=MediQueue;User Id=sa;
-        Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True
+      ASPNETCORE_ENVIRONMENT: Production
+      Database__Provider: Postgres
+      ConnectionStrings__Default: Host=db;Database=mediqueue;Username=mediqueue;Password=${POSTGRES_PASSWORD}
       # Required outside Development; there is no fallback in production.
       Jwt__Key: ${JWT_KEY:?set JWT_KEY in a .env file}
-      # Demo patients stay out of anything resembling a real deployment.
-      Seed__DemoData: "false"
-      ASPNETCORE_ENVIRONMENT: Production
+      # The same demo hospital as Heroku, behind a password of your choosing.
+      Seed__DemoData: "true"
+      Seed__StaffPassword: ${SEED_STAFF_PASSWORD:?set SEED_STAFF_PASSWORD in a .env file}
     ports:
       - "8080:8080"
 
 volumes:
-  mssql-data:
+  pg-data:
