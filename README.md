@@ -108,7 +108,7 @@ Everything below is done in the Heroku dashboard; no CLI is needed.
 Generate `Jwt__Key` on your own machine, so it never passes through chat or the repository:
 
 ```powershell
-[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(48))
+$b = New-Object byte[] 48; [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b); [Convert]::ToBase64String($b)
 ```
 
 ```bash
