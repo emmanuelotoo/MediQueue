@@ -78,7 +78,7 @@ The design specification is in [`docs/superpowers/specs`](docs/superpowers/specs
 | `Database:Provider` | `Sqlite` | `Postgres` in deployment. Any other value stops startup. |
 | `ConnectionStrings:Default` | `Data Source=mediqueue.db` | Used unless `DATABASE_URL` is set |
 | `DATABASE_URL` | — | Set by Heroku Postgres; takes precedence when the provider is Postgres |
-| `Jwt:Key` | generated per run in Development | **Required** outside Development; startup fails without it |
+| `Jwt:Key` | generated per run in Development | **Required** outside Development. At least 32 bytes; startup fails otherwise |
 | `Seed:DemoData` | `true` in Development only | Seeds the demo hospital on an empty database |
 | `Seed:StaffPassword` | README password in Development only | **Required** when seeding outside Development. Must meet the password policy and must not be the README password. |
 | `Hosting:TrustForwardedHeaders` | `false` | `true` behind Heroku's router, so HTTPS is recognised |
@@ -104,6 +104,8 @@ Everything below is done in the Heroku dashboard; no CLI is needed.
 | `Seed__DemoData` | `true` |
 | `Seed__StaffPassword` | a password you choose: 10+ characters, an uppercase letter, a digit and a symbol, and not the README password |
 | `Hosting__TrustForwardedHeaders` | `true` |
+
+Every name has two underscores. .NET ignores `Jwt_Key` with one, and startup stops and lists any it finds.
 
 Generate `Jwt__Key` on your own machine, so it never passes through chat or the repository:
 
@@ -134,7 +136,10 @@ After that, every push to `main` deploys once CI passes. Migrations run in the r
 | Symptom | Cause |
 | --- | --- |
 | Release fails naming `Seed__StaffPassword` | The var is missing, too weak, or the README password |
+| Startup fails listing settings *named with one underscore* | Config vars such as `Jwt_Key`; rename each as the message says, e.g. `Jwt__Key` |
 | App crashes with `Jwt:Key is not configured` | `Jwt__Key` is missing |
+| Startup fails with `Jwt:Key is N bytes` | The key is too short; generate one with the command above |
+| Startup fails with `DATABASE_URL is set` | `Database__Provider` is missing, so the app would use SQLite; set it to `Postgres` |
 | Startup fails with `Unknown Database:Provider` | `Database__Provider` is misspelt; it must be `Postgres` |
 | Build fails with *Multiple .NET solution files* | `project.toml` was not picked up. Add config var `SOLUTION_FILE` = `MediQueue.Heroku.slnx` |
 

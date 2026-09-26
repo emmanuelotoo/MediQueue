@@ -64,6 +64,29 @@ public class DatabaseProviderTests
         Assert.Contains("DATABASE_URL", error.Message);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Sqlite")]
+    public void An_attached_database_is_never_passed_over_for_sqlite(string? provider)
+    {
+        // Heroku sets DATABASE_URL when Postgres is attached. Using SQLite anyway
+        // would put the data on a disk that is wiped at least once a day.
+        var error = Assert.Throws<InvalidOperationException>(() => Build(new()
+        {
+            ["Database:Provider"] = provider,
+            ["DATABASE_URL"] = "postgres://u:p@heroku-host:5432/herokudb"
+        }));
+
+        Assert.Contains("Database__Provider", error.Message);
+    }
+
+    [Fact]
+    public void A_blank_DATABASE_URL_does_not_count_as_an_attached_database()
+    {
+        // The test factory blanks it so a machine's own DATABASE_URL cannot interfere.
+        Assert.IsType<SqliteMediQueueDbContext>(Resolve(new() { ["DATABASE_URL"] = "" }));
+    }
+
     [Fact]
     public void A_misspelt_provider_stops_startup_instead_of_quietly_using_sqlite()
     {

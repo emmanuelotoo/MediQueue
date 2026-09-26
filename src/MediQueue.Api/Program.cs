@@ -16,6 +16,10 @@ var migrateOnly = args.Contains(MigrateOnlySwitch);
 
 var builder = WebApplication.CreateBuilder(args.Where(arg => arg != MigrateOnlySwitch).ToArray());
 
+// First, so a misnamed config var is reported as itself rather than as
+// whichever missing setting would have failed next.
+ConfigurationChecks.RejectSingleUnderscoreNames(builder.Configuration);
+
 builder.Services.AddMediQueueInfrastructure(builder.Configuration);
 
 var jwt = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
@@ -32,6 +36,8 @@ if (string.IsNullOrWhiteSpace(jwt.Key))
     // Restarting the app signs everyone out, which is correct for a dev default.
     jwt.Key = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
 }
+
+ConfigurationChecks.RequireStrongJwtKey(jwt.Key);
 
 builder.Services.AddSingleton(jwt);
 builder.Services.AddSingleton<ITokenService, TokenService>();

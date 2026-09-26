@@ -59,6 +59,15 @@ public static class DependencyInjection
 
         if (string.Equals(provider, "Sqlite", StringComparison.OrdinalIgnoreCase))
         {
+            // Heroku sets DATABASE_URL when Postgres is attached. SQLite there
+            // would keep the data on a disk that is wiped at least once a day.
+            if (!string.IsNullOrWhiteSpace(configuration["DATABASE_URL"]))
+            {
+                throw new InvalidOperationException(
+                    "DATABASE_URL is set, so a Postgres database is attached, but the app is set to use SQLite "
+                    + "(Database:Provider is unset or Sqlite). Set the config var Database__Provider to Postgres.");
+            }
+
             var connectionString = configuration.GetConnectionString("Default")
                 ?? "Data Source=mediqueue.db";
 
