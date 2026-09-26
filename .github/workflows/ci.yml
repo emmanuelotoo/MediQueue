@@ -75,3 +75,43 @@ jobs:
 
       - name: Test the API against Postgres
         run: dotnet test tests/MediQueue.Api.Tests --configuration Release --logger GitHubActions
+
+  heroku:
+    name: Heroku build rehearsal
+    runs-on: ubuntu-latest
+
+    # Repeats what Heroku's .NET buildpack does with this repository, so a
+    # deploy build that would fail on Heroku fails here first, and Heroku's
+    # "wait for CI" holds it back.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The buildpack accepts only a .sln or .slnx file name in the repository root.
+      - name: Check project.toml names a root solution file
+        id: solution
+        run: |
+          file=$(sed -n 's/^solution_file = "\(.*\)"$/\1/p' project.toml)
+          case "$file" in
+            */* | "") echo "::error file=project.toml::solution_file must be a file name in the repository root"; exit 1 ;;
+            *.sln | *.slnx) ;;
+            *) echo "::error file=project.toml::solution_file must be a .sln or .slnx file"; exit 1 ;;
+          esac
+          test -f "$file" || { echo "::error file=project.toml::$file does not exist"; exit 1; }
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+
+      # The buildpack's exact command (dotnet_sdk_command.rs in heroku/buildpacks-dotnet).
+      - name: Publish as the buildpack does
+        run: dotnet publish "${{ steps.solution.outputs.file }}" --runtime linux-x64 -p:PublishDir=bin/publish --artifacts-path "$RUNNER_TEMP/build_artifacts"
+
+      - name: Check every project was built in Release
+        run: |
+          debug=$(find "$RUNNER_TEMP/build_artifacts/bin" -mindepth 2 -maxdepth 2 -type d -name 'debug*')
+          if [ -n "$debug" ]; then echo "::error::Built in Debug: $debug"; exit 1; fi
+
+      - name: Check the executable the Procfile runs exists
+        run: test -x src/MediQueue.Api/bin/publish/MediQueue.Api

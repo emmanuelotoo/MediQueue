@@ -1,9 +1,9 @@
-# Heroku's .NET buildpack publishes what this names. The API alone keeps the
-# test projects out of the slug and builds the Blazor client once, as a
-# reference. Publishing the whole solution races on the client's static-asset
-# cache and fails intermittently.
+# Heroku's .NET buildpack publishes the solution named here, which must be a
+# file in the repository root. MediQueue.Heroku.slnx lists only the API: the
+# whole MediQueue.slnx would ship the test projects and build the Blazor client
+# twice at once, which fails intermittently.
 [_]
 schema-version = "0.2"
 
 [com.heroku.buildpacks.dotnet]
-solution_file = "src/MediQueue.Api/MediQueue.Api.csproj"
+solution_file = "MediQueue.Heroku.slnx"

@@ -119,7 +119,7 @@ Share `Seed__StaffPassword` with the team privately. Every seeded staff account 
 
 **4. Connect GitHub.** **Deploy** → **Deployment method: GitHub** → connect → find `MediQueue` → **Connect**. Under **Automatic deploys**, choose `main`, tick **Wait for CI to pass before deploy**, then **Enable Automatic Deploys**.
 
-**5. First deploy.** Under **Manual deploy**, choose `main` → **Deploy Branch**. The build log should show `dotnet publish` of `src/MediQueue.Api/MediQueue.Api.csproj`. The release log should end with `Seeded 6 departments, 11 staff, 180 patients.`
+**5. First deploy.** Under **Manual deploy**, choose `main` → **Deploy Branch**. The build log should show `Using configured solution file: MediQueue.Heroku.slnx`, the solution that contains only the API. The release log should end with `Seeded 6 departments, 11 staff, 180 patients.`
 
 **6. Use a Basic dyno.** **Resources** → **Change Dyno Type** → **Basic**. Eco dynos sleep after 30 minutes idle, and the first visitor afterwards waits while it wakes. That's bad in a demo.
 
@@ -136,7 +136,7 @@ After that, every push to `main` deploys once CI passes. Migrations run in the r
 | Release fails naming `Seed__StaffPassword` | The var is missing, too weak, or the README password |
 | App crashes with `Jwt:Key is not configured` | `Jwt__Key` is missing |
 | Startup fails with `Unknown Database:Provider` | `Database__Provider` is misspelt; it must be `Postgres` |
-| Build log publishes `MediQueue.slnx` instead of the API project | `project.toml` was not picked up. Add config var `SOLUTION_FILE` = `src/MediQueue.Api/MediQueue.Api.csproj` |
+| Build fails with *Multiple .NET solution files* | `project.toml` was not picked up. Add config var `SOLUTION_FILE` = `MediQueue.Heroku.slnx` |
 
 ## Running with Docker
 

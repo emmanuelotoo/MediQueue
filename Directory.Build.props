@@ -12,4 +12,14 @@
     <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
   </PropertyGroup>
 
+  <!--
+    MediQueue.Heroku.slnx lists only the API. MSBuild would otherwise build the
+    projects it references in Debug, because they are missing from that
+    solution; this makes them follow the API's configuration. MediQueue.slnx
+    lists every project, so it is unaffected.
+  -->
+  <PropertyGroup>
+    <ShouldUnsetParentConfigurationAndPlatform>false</ShouldUnsetParentConfigurationAndPlatform>
+  </PropertyGroup>
+
 </Project>
