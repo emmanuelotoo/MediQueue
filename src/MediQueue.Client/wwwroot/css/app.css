@@ -1051,13 +1051,15 @@ a {
 .board__serving {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  /* Wide enough that codes stay large; a 1080p screen shows three a row. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 28rem), 1fr));
   gap: clamp(1rem, 2vw, 2rem);
   align-content: center;
   padding: clamp(1rem, 3vh, 3rem) 0;
 }
 
 .serving {
+  container-type: inline-size;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1076,8 +1078,15 @@ a {
   }
 }
 
+/*
+  Sized by the card, not the screen. Sized by the screen, the text stayed full
+  size while the grid narrowed the cards, and codes ran into the room numbers.
+  14cqi leaves room for a two-digit room. The vw line is for browsers without
+  container queries.
+*/
 .serving__code {
   font-size: clamp(2.5rem, 6vw, 5rem);
+  font-size: clamp(2rem, min(6vw, 14cqi), 5rem);
   line-height: 1;
   color: var(--accent);
 }
@@ -1099,6 +1108,7 @@ a {
 
 .serving__room strong {
   font-size: clamp(2.5rem, 6vw, 5rem);
+  font-size: clamp(2rem, min(6vw, 14cqi), 5rem);
   font-weight: 600;
   line-height: 1;
 }
